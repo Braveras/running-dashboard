@@ -1304,8 +1304,8 @@
   "sleep_stress": 21.0
  },
  {
-  "bb_charged": 57,
-  "bb_drained": 14,
+  "bb_charged": 59,
+  "bb_drained": 44,
   "bedtime": 1.25,
   "date": "2026-06-11",
   "deep_pct": 15.3,
