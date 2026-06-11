@@ -87,12 +87,18 @@ function registerChart(id, instance) {
 // ─────────────────────────────────────────────────────────────────────────────
 let rangeDays = null; // null = all
 
+function localTodayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function cutoffStr(days) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 function inRange(dateStr) {
   if (rangeDays === null) return true;
-  const now = new Date();
-  const d = new Date(dateStr);
-  const diffMs = now - d;
-  return diffMs >= 0 && diffMs <= rangeDays * 86400 * 1000;
+  return dateStr >= cutoffStr(rangeDays);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,6 +134,10 @@ async function init() {
       detailRes.json(),
       metaRes.json(),
     ]);
+
+    // Defensive sort: ensure chronological order for all range/streak logic
+    runs.sort((a, b) => a.date.localeCompare(b.date));
+    daily.sort((a, b) => a.date.localeCompare(b.date));
 
     // Header: updated timestamp
     const updatedEl = document.getElementById("updated");
@@ -172,7 +182,7 @@ function renderAll() {
   renderPaceHr(fRuns);
   renderMaxHr(fRuns);
   renderMonthly(); // always uses full data
-  renderEF();
+  renderEF(fRuns);
   renderHrv(fDaily);
   renderSleep(fDaily);
   renderBB(fDaily);
@@ -204,15 +214,11 @@ function renderCards(fRuns) {
   setText("cardVo2", status.vo2max != null ? status.vo2max.toFixed(1) : "—");
 
   // Streak: runs in last 28 days / 4 (use full runs list, not range-filtered)
-  const now = new Date();
-  const runs28 = runs.filter((r) => {
-    const diff = now - new Date(r.date);
-    return diff >= 0 && diff <= 28 * 86400 * 1000;
-  });
+  const runs28 = runs.filter((r) => r.date >= cutoffStr(28));
   setText("cardStreak", (runs28.length / 4).toFixed(1) + "/sem");
 
   // This month vs previous month (use full runs list)
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localTodayStr();
   const curYM = todayStr.slice(0, 7);
   const prevDate = new Date();
   prevDate.setDate(1);
@@ -494,9 +500,8 @@ function renderMonthly() {
 // ─────────────────────────────────────────────────────────────────────────────
 // CHART 5: EF — Efficiency Factor line + linear-regression trend (Task 8)
 // ─────────────────────────────────────────────────────────────────────────────
-function renderEF() {
+function renderEF(fRuns) {
   destroyChart("ef");
-  const fRuns = runs.filter((r) => inRange(r.date));
   const sorted = [...fRuns]
     .filter((r) => r.ef != null)
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -1163,10 +1168,13 @@ function openRunModal(id) {
   modal.classList.remove("hidden");
 
   // Close handlers
-  const closeModal = () => modal.classList.add("hidden");
+  const onKey = (e) => { if (e.key === "Escape") closeModal(); };
+  const closeModal = () => {
+    document.removeEventListener("keydown", onKey);
+    modal.classList.add("hidden");
+  };
   document.getElementById("modalClose").onclick = closeModal;
   modal.onclick = (e) => { if (e.target === modal) closeModal(); };
-  const onKey = (e) => { if (e.key === "Escape") { closeModal(); document.removeEventListener("keydown", onKey); } };
   document.addEventListener("keydown", onKey);
 }
 
@@ -1334,7 +1342,13 @@ function renderHeatmap() {
   if (!container) return;
   container.innerHTML = "";
 
-  const firstDate = meta.first_date ? new Date(meta.first_date) : new Date();
+  let firstDate;
+  if (meta.first_date) {
+    const [y, m, dd] = meta.first_date.split("-").map(Number);
+    firstDate = new Date(y, m - 1, dd);
+  } else {
+    firstDate = new Date();
+  }
   const today = new Date();
 
   // Build day→activity map
@@ -1403,7 +1417,8 @@ function renderHeatmap() {
       const day = weeks[wi][di];
       if (day > today) continue; // don't render future days
 
-      const ds = day.toISOString().slice(0, 10);
+      const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const ds = dayKey(day);
       const act = dayMap[ds];
 
       const cell = document.createElement("div");
@@ -1453,7 +1468,10 @@ function renderToday() {
   const today = daily[daily.length - 1] || {};
   const lastRun = runs[runs.length - 1];
   const daysSince = lastRun
-    ? Math.floor((Date.now() - new Date(lastRun.date)) / 864e5)
+    ? (() => {
+        const [y2, m2, d2] = lastRun.date.split("-").map(Number);
+        return Math.round((new Date().setHours(0, 0, 0, 0) - new Date(y2, m2 - 1, d2).getTime()) / 864e5);
+      })()
     : 99;
   const low = (status.hrv_baseline || {}).balancedLow ?? 45;
 
