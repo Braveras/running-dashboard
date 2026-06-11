@@ -147,15 +147,23 @@ def fetch_dailies(g):
     today = today_madrid()
 
     bb = {}
-    for item in safe(g.get_body_battery, iso(start), iso(today), default=[]) or []:
-        bb[item.get("date")] = {"bb_charged": item.get("charged"), "bb_drained": item.get("drained")}
+    chunk_start = start
+    while chunk_start <= today:
+        chunk_end = min(chunk_start + timedelta(days=27), today)
+        for item in safe(g.get_body_battery, iso(chunk_start), iso(chunk_end), default=[]) or []:
+            bb[item.get("date")] = {"bb_charged": item.get("charged"), "bb_drained": item.get("drained")}
+        chunk_start = chunk_end + timedelta(days=1)
 
     weights = {}
-    w = safe(g.get_weigh_ins, iso(start), iso(today), default={}) or {}
-    for ws in w.get("dailyWeightSummaries", []):
-        lw = ws.get("latestWeight") or {}
-        if lw.get("weight"):
-            weights[ws.get("summaryDate")] = round(lw["weight"] / 1000, 1)
+    chunk_start = start
+    while chunk_start <= today:
+        chunk_end = min(chunk_start + timedelta(days=27), today)
+        w = safe(g.get_weigh_ins, iso(chunk_start), iso(chunk_end), default={}) or {}
+        for ws in w.get("dailyWeightSummaries", []):
+            lw = ws.get("latestWeight") or {}
+            if lw.get("weight"):
+                weights[ws.get("summaryDate")] = round(lw["weight"] / 1000, 1)
+        chunk_start = chunk_end + timedelta(days=1)
 
     d = start
     hrv_baseline = None
