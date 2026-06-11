@@ -4,7 +4,8 @@ Token: env GARMIN_TOKENS (CI) o fichero .garmin_tokens (local).
 import json
 import os
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from garminconnect import Garmin
 
@@ -15,6 +16,11 @@ ROOT = os.path.join(os.path.dirname(__file__), "..")
 DATA = os.path.join(ROOT, "data")
 FIRST_DATE = "2026-03-01"
 HISTORY_REFETCH_DAYS = 7  # dailies: re-fetch últimos N días por si sincronizó tarde
+MADRID = ZoneInfo("Europe/Madrid")
+
+
+def today_madrid():
+    return datetime.now(MADRID).date()
 
 
 def load_json(name, default):
@@ -36,12 +42,15 @@ def get_client():
     if not token:
         tf = os.path.join(ROOT, ".garmin_tokens")
         if os.path.exists(tf):
-            with open(tf) as f:
+            with open(tf, encoding="utf-8") as f:
                 token = f.read().strip()
     if not token:
         sys.exit("Sin token: define GARMIN_TOKENS o ejecuta scripts/login.py")
     g = Garmin()
-    g.login(tokenstore=token)
+    try:
+        g.login(tokenstore=token)
+    except Exception as e:
+        sys.exit(f"Login Garmin falló (token caducado?): {type(e).__name__}: {e}")
     return g
 
 
@@ -49,7 +58,7 @@ def safe(fn, *args, default=None):
     try:
         return fn(*args)
     except Exception as e:
-        print(f"  warn: {fn.__name__}{args} -> {type(e).__name__}: {e}")
+        print(f"  warn: {fn.__name__}({', '.join(repr(a)[:40] for a in args)}) -> {type(e).__name__}: {e}")
         return default
 
 
@@ -58,8 +67,13 @@ def iso(d):
 
 
 def fetch_activities(g):
-    today = iso(date.today())
+    existing_all = load_json("all_activities.json", [])
+    existing_runs = load_json("runs.json", [])
+    today = iso(today_madrid())
     acts = safe(g.get_activities_by_date, FIRST_DATE, today, default=[]) or []
+    if len(acts) < len(existing_all):
+        print(f"  WARN: API devolvió {len(acts)} actividades, en disco hay {len(existing_all)} — conservo datos existentes")
+        return existing_all, existing_runs
     all_acts, runs = [], []
     for a in acts:
         start = (a.get("startTimeLocal") or "").replace(" ", "T")
@@ -116,6 +130,7 @@ def fetch_run_details(g, runs):
         if w and w.get("temp") is not None:
             d["weather"] = {
                 "temp_c": round((w["temp"] - 32) * 5 / 9, 1),  # API devuelve °F
+                "temp_raw": w["temp"],  # temp_raw para verificar unidad en primer backfill
                 "humidity": w.get("relativeHumidity"),
             }
         details[rid] = d
@@ -129,7 +144,7 @@ def fetch_dailies(g):
         start = max(start, datetime.strptime(FIRST_DATE, "%Y-%m-%d").date())
     else:
         start = datetime.strptime(FIRST_DATE, "%Y-%m-%d").date()
-    today = date.today()
+    today = today_madrid()
 
     bb = {}
     for item in safe(g.get_body_battery, iso(start), iso(today), default=[]) or []:
@@ -154,7 +169,8 @@ def fetch_dailies(g):
         if total:
             scores = dto.get("sleepScores") or {}
             start_local = dto.get("sleepStartTimestampLocal")
-            start_iso = (datetime.fromtimestamp(start_local / 1000).isoformat()
+            # timestampLocal = hora pared codificada como epoch UTC
+            start_iso = (datetime.fromtimestamp(start_local / 1000, tz=timezone.utc).isoformat()
                          if start_local else None)
             entry.update({
                 "sleep_hours": round(total / 3600, 2),
@@ -183,8 +199,8 @@ def fetch_dailies(g):
 
 
 def fetch_status(g, hrv_baseline):
-    ts = safe(g.get_training_status, iso(date.today()), default={}) or {}
-    out = {"date": iso(date.today()), "hrv_baseline": hrv_baseline}
+    ts = safe(g.get_training_status, iso(today_madrid()), default={}) or {}
+    out = {"date": iso(today_madrid()), "hrv_baseline": hrv_baseline}
     try:
         vo2 = (ts.get("mostRecentVO2Max") or {}).get("generic") or {}
         out["vo2max"] = vo2.get("vo2MaxPreciseValue") or vo2.get("vo2MaxValue")
