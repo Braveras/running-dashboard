@@ -1,0 +1,430 @@
+/* ============================================================
+   Dashboard Running — Alejandro
+   Palette reused from progreso.html
+   ============================================================ */
+
+:root {
+  --bg:    #0e1116;
+  --card:  #161b24;
+  --card2: #1c2330;
+  --txt:   #e8edf4;
+  --mut:   #8b97a8;
+  --acc:   #4dd0a6;
+  --acc2:  #5b9cf6;
+  --warn:  #f6a35b;
+  --bad:   #ef6b6b;
+  --border: #232b3a;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--txt);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  padding: 32px 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* ── Typography ─────────────────────────────────────────── */
+
+h1 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -.5px;
+}
+
+h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.sub {
+  color: var(--mut);
+  margin: 6px 0 28px;
+  font-size: 14px;
+}
+
+/* ── Layout helpers ─────────────────────────────────────── */
+
+.grid {
+  display: grid;
+  gap: 14px;
+}
+
+.stats {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-bottom: 26px;
+}
+
+.two {
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 760px) {
+  .two {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Stat cards ─────────────────────────────────────────── */
+
+.stat {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 18px 16px;
+  border: 1px solid var(--border);
+}
+
+.stat .v {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--acc);
+}
+
+.stat .l {
+  font-size: 12px;
+  color: var(--mut);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+}
+
+.stat.alt .v  { color: var(--acc2); }
+.stat.warn .v { color: var(--warn); }
+
+/* ── Generic card ───────────────────────────────────────── */
+
+.card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  margin-bottom: 18px;
+}
+
+.card .note {
+  font-size: 12.5px;
+  color: var(--mut);
+  margin-bottom: 14px;
+}
+
+/* ── Canvas ─────────────────────────────────────────────── */
+
+canvas {
+  max-height: 300px;
+}
+
+/* ── Range selector ─────────────────────────────────────── */
+
+#rangeSel {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.range-btn {
+  background: var(--card2);
+  color: var(--mut);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+
+.range-btn:hover {
+  border-color: var(--acc);
+  color: var(--txt);
+}
+
+.range-btn.active {
+  background: #0d2b22;
+  border-color: var(--acc);
+  color: var(--acc);
+  font-weight: 600;
+}
+
+/* ── Today / semáforo panel ─────────────────────────────── */
+
+#today {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+#todayLight {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+#todayMsg {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+#todayReasons {
+  list-style: none;
+  font-size: 13.5px;
+  color: var(--mut);
+  line-height: 1.7;
+}
+
+#todayReasons li {
+  padding-left: 16px;
+  position: relative;
+}
+
+#todayReasons li::before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+  color: var(--acc);
+}
+
+/* semáforo dot */
+.light {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.light.verde { background: var(--acc); }
+.light.ambar { background: var(--warn); }
+.light.rojo  { background: var(--bad); }
+
+/* ── Correlation explorer ───────────────────────────────── */
+
+.scatter-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.scatter-controls label {
+  font-size: 12px;
+  color: var(--mut);
+}
+
+.scatter-controls select {
+  background: var(--card2);
+  color: var(--txt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.preset {
+  background: var(--card2);
+  color: var(--acc2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+
+.preset:hover {
+  border-color: var(--acc2);
+  background: #0d1e38;
+}
+
+#scatterR2 {
+  font-size: 12px;
+  color: var(--warn);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+/* ── Heatmap ─────────────────────────────────────────────── */
+
+#heatmap {
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.hm-row {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 3px;
+}
+
+.hm-cell {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  background: var(--card2);
+  flex-shrink: 0;
+}
+
+.hm-run1  { background: #1e4d3d; }
+.hm-run2  { background: #2d7a5f; }
+.hm-run3  { background: var(--acc); }
+.hm-other { background: var(--acc2); }
+
+.hm-label {
+  font-size: 10px;
+  color: var(--mut);
+}
+
+.hm-legend {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.hm-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--mut);
+}
+
+/* ── Runs table ──────────────────────────────────────────── */
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+#runsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+#runsTable thead th {
+  text-align: left;
+  padding: 8px 12px;
+  color: var(--mut);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  border-bottom: 1px solid var(--border);
+}
+
+#runsTable tbody td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #1a2030;
+  vertical-align: middle;
+}
+
+tbody tr {
+  cursor: pointer;
+  transition: background .12s;
+}
+
+tbody tr:hover {
+  background: var(--card2);
+}
+
+/* ── Modal ───────────────────────────────────────────────── */
+
+#modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+#modal.hidden {
+  display: none;
+}
+
+.modal-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  max-width: 720px;
+  width: 92vw;
+  max-height: 85vh;
+  overflow: auto;
+  position: relative;
+}
+
+#modalClose {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: var(--mut);
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+  transition: color .12s;
+}
+
+#modalClose:hover {
+  color: var(--txt);
+}
+
+#modalBody {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.modal-panel h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: var(--acc);
+}
+
+.modal-panel .detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 20px;
+  margin-bottom: 16px;
+}
+
+.modal-panel .detail-item .dl { font-size: 11px; color: var(--mut); text-transform: uppercase; letter-spacing: .5px; }
+.modal-panel .detail-item .dv { font-size: 18px; font-weight: 700; color: var(--acc); margin-top: 2px; }
+
+/* ── Footer ──────────────────────────────────────────────── */
+
+footer {
+  color: var(--mut);
+  font-size: 11.5px;
+  text-align: center;
+  margin-top: 24px;
+}
+
+/* ── Badge (reused from progreso.html) ───────────────────── */
+
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: #21303f;
+  color: var(--acc2);
+  margin-left: 6px;
+  vertical-align: middle;
+}
