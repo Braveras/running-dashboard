@@ -1,4 +1,5 @@
 name: Update dashboard
+
 on:
   schedule:
     - cron: "0 8 * * *"   # 10:00 Madrid (verano)
