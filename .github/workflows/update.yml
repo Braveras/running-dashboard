@@ -27,8 +27,11 @@ jobs:
       - run: pip install "garminconnect==0.3.5" tzdata
       - name: Fetch Garmin data
         env:
-          GARMIN_TOKENS: ${{ secrets.GARMIN_TOKENS }}
-        run: python scripts/fetch_data.py
+          GARMIN_TOKENS_B64: ${{ secrets.GARMIN_TOKENS_B64 }}
+        run: |
+          echo "$GARMIN_TOKENS_B64" | base64 -d > .garmin_tokens
+          python scripts/fetch_data.py
+          rm .garmin_tokens
       - name: Commit data
         run: |
           git config user.name "github-actions[bot]"
