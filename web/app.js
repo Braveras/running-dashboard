@@ -172,7 +172,7 @@ function renderAll() {
   renderPaceHr(fRuns);
   renderMaxHr(fRuns);
   renderMonthly(); // always uses full data
-  renderEF();      // Task 8 stub
+  renderEF();
   renderHrv(fDaily);
   renderSleep(fDaily);
   renderBB(fDaily);
@@ -180,8 +180,6 @@ function renderAll() {
   renderCadence(fRuns);
   renderWeight(fDaily);
   renderRunsTable(fRuns);
-
-  // Task 8 stubs
   renderScatter();
   renderHeatmap();
   renderToday();
@@ -494,11 +492,90 @@ function renderMonthly() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CHART 5: EF — STUB (Task 8)
+// CHART 5: EF — Efficiency Factor line + linear-regression trend (Task 8)
 // ─────────────────────────────────────────────────────────────────────────────
-// eslint-disable-next-line no-unused-vars
 function renderEF() {
-  // Task 8
+  destroyChart("ef");
+  const fRuns = runs.filter((r) => inRange(r.date));
+  const sorted = [...fRuns]
+    .filter((r) => r.ef != null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!sorted.length) return;
+
+  const labels = sorted.map((r) => fmtDate(r.date));
+  const efData = sorted.map((r) => r.ef);
+
+  // Least-squares trend line over index
+  const n = sorted.length;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (let i = 0; i < n; i++) {
+    sx += i; sy += efData[i];
+    sxx += i * i; sxy += i * efData[i];
+  }
+  const denom = n * sxx - sx * sx;
+  let trendData = null;
+  if (denom !== 0) {
+    const b = (n * sxy - sx * sy) / denom;
+    const a = (sy - b * sx) / n;
+    trendData = efData.map((_, i) => +(a + b * i).toFixed(4));
+  }
+
+  const datasets = [
+    {
+      label: "EF",
+      data: efData,
+      borderColor: "#4dd0a6",
+      backgroundColor: "#4dd0a622",
+      borderWidth: 2,
+      pointRadius: 3,
+      tension: 0.3,
+      fill: true,
+    },
+  ];
+  if (trendData) {
+    datasets.push({
+      label: "Tendencia",
+      data: trendData,
+      borderColor: "#f6a35b",
+      borderWidth: 1.5,
+      borderDash: [5, 4],
+      pointRadius: 0,
+      tension: 0,
+    });
+  }
+
+  registerChart(
+    "ef",
+    new Chart(document.getElementById("ef"), {
+      type: "line",
+      data: { labels, datasets },
+      options: {
+        plugins: {
+          legend: { display: true },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const r = sorted[ctx.dataIndex];
+                if (ctx.dataset.label === "EF") {
+                  return `EF: ${ctx.parsed.y.toFixed(2)} · ${fmtDate(r.date)}`;
+                }
+                return `Tendencia: ${ctx.parsed.y.toFixed(3)}`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: { grid: { display: false } },
+          y: {
+            grid: { color: GRID },
+            title: { display: true, text: "EF (velocidad/FC)" },
+            min: 0.6,
+            max: 0.9,
+          },
+        },
+      },
+    })
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -983,28 +1060,455 @@ function renderRunsTable(fRuns) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Task 8 STUBS — empty, clearly marked
+// openRunModal — drill-down modal for individual run (Task 8)
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Task 8: drill-down modal for individual run
-// eslint-disable-next-line no-unused-vars
 function openRunModal(id) {
-  // Task 8
+  const strId = String(id);
+  const run = runs.find((r) => String(r.id) === strId);
+  const detail = runsDetail[strId] || {};
+  const modal = document.getElementById("modal");
+  const body = document.getElementById("modalBody");
+  if (!modal || !body) return;
+
+  // ── Format bedtime decimal → "HH:MM" ──────────────────────────────────────
+  function fmtBedtime(dec) {
+    if (dec == null) return "—";
+    // decimal hours (e.g. 1.25 → "01:15", 23.5 → "23:30")
+    const h = Math.floor(dec);
+    const m = Math.round((dec - h) * 60);
+    return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+  }
+
+  // ── Zone colours Z1→Z5 ────────────────────────────────────────────────────
+  const ZONE_COLORS = ["#8b97a8", "#4dd0a6", "#f6a35b", "#ef6b6b", "#b86bef"];
+  const ZONE_LABELS = ["Z1", "Z2", "Z3", "Z4", "Z5"];
+
+  // ── Build HTML ─────────────────────────────────────────────────────────────
+  let html = "";
+
+  // Title
+  html += `<h3>${fmtDate(run.date)} · ${run.km.toFixed(2)} km · ${fmtDur(run.dur_s)}</h3>`;
+
+  // Splits table
+  if (detail.splits && detail.splits.length) {
+    html += `<table class="splits-table">
+      <thead><tr><th>Km</th><th>Ritmo</th><th>FC</th><th>Cad</th><th>Desnivel</th></tr></thead>
+      <tbody>`;
+    detail.splits.forEach((s, i) => {
+      const pace = s.dur_s && s.km ? paceFmt(s.dur_s / s.km) + "/km" : "—";
+      const hr = s.hr != null ? Math.round(s.hr) : "—";
+      const cad = s.cadence != null ? s.cadence : "—";
+      const elev = (s.elev_gain != null || s.elev_loss != null)
+        ? `+${(s.elev_gain || 0).toFixed(0)}/-${(s.elev_loss || 0).toFixed(0)} m`
+        : "—";
+      html += `<tr><td>${i + 1}</td><td>${pace}</td><td>${hr}</td><td>${cad}</td><td>${elev}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  // HR zones (horizontal CSS bars)
+  if (detail.zones && detail.zones.length) {
+    const totalSecs = detail.zones.reduce((a, z) => a + z.secs, 0) || 1;
+    html += `<div style="margin:16px 0"><strong style="font-size:13px;color:var(--mut)">ZONAS FC</strong>`;
+    for (const z of detail.zones) {
+      const pct = ((z.secs / totalSecs) * 100).toFixed(1);
+      const mins = Math.floor(z.secs / 60);
+      const secs = z.secs % 60;
+      const label = ZONE_LABELS[z.zone - 1] || `Z${z.zone}`;
+      const color = ZONE_COLORS[z.zone - 1] || "#8b97a8";
+      const timeStr = `${mins}:${String(secs).padStart(2, "0")} min`;
+      html += `<div style="margin:6px 0">
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
+          <span style="color:${color}">${label} (≥${z.low} ppm)</span>
+          <span style="color:var(--mut)">${timeStr}</span>
+        </div>
+        <div style="background:var(--card2);border-radius:3px;height:8px;overflow:hidden">
+          <div style="background:${color};width:${pct}%;height:100%;border-radius:3px"></div>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Weather
+  if (detail.weather) {
+    const w = detail.weather;
+    html += `<div style="margin:12px 0;font-size:13px;color:var(--mut)">
+      <strong style="color:var(--txt)">Clima</strong>:
+      ${w.temp_c != null ? w.temp_c + "°C" : ""}
+      ${w.humidity != null ? "· " + w.humidity + "% humedad" : ""}
+    </div>`;
+  }
+
+  // Sleep / noche anterior
+  html += `<div style="margin:16px 0"><strong style="font-size:13px;color:var(--mut)">NOCHE ANTERIOR</strong>
+    <div class="detail-grid" style="margin-top:8px">`;
+
+  const sleepFields = [
+    ["Score sueño", run.sleep_score_prev],
+    ["Horas sueño", run.sleep_hours_prev != null ? run.sleep_hours_prev + " h" : null],
+    ["REM", run.rem_pct_prev != null ? run.rem_pct_prev + "%" : null],
+    ["Acostarse", fmtBedtime(run.bedtime_prev)],
+    ["HRV matinal", run.hrv_morning != null ? run.hrv_morning + " ms" : null],
+  ];
+  for (const [label, val] of sleepFields) {
+    html += `<div class="detail-item">
+      <div class="dl">${label}</div>
+      <div class="dv">${val != null ? val : "—"}</div>
+    </div>`;
+  }
+  html += `</div></div>`;
+
+  body.innerHTML = html;
+  modal.classList.remove("hidden");
+
+  // Close handlers
+  const closeModal = () => modal.classList.add("hidden");
+  document.getElementById("modalClose").onclick = closeModal;
+  modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+  const onKey = (e) => { if (e.key === "Escape") { closeModal(); document.removeEventListener("keydown", onKey); } };
+  document.addEventListener("keydown", onKey);
 }
 
-// Task 8: correlation scatter chart
-function renderScatter() {
-  // Task 8
+// ─────────────────────────────────────────────────────────────────────────────
+// linreg helper
+// ─────────────────────────────────────────────────────────────────────────────
+function linreg(pts) {
+  const n = pts.length;
+  const sx = pts.reduce((a, p) => a + p.x, 0);
+  const sy = pts.reduce((a, p) => a + p.y, 0);
+  const sxy = pts.reduce((a, p) => a + p.x * p.y, 0);
+  const sxx = pts.reduce((a, p) => a + p.x * p.x, 0);
+  const syy = pts.reduce((a, p) => a + p.y * p.y, 0);
+  const b = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+  const a = (sy - b * sx) / n;
+  const r = (n * sxy - sx * sy) / Math.sqrt((n * sxx - sx * sx) * (n * syy - sy * sy));
+  return { a, b, r2: r * r };
 }
 
-// Task 8: activity heatmap calendar
+// ─────────────────────────────────────────────────────────────────────────────
+// renderScatter — correlation explorer (Task 8)
+// ─────────────────────────────────────────────────────────────────────────────
+let _scatterSelectsPopulated = false;
+
+const SCATTER_VARS = [
+  { label: "Temperatura °C",        key: "temp_c" },
+  { label: "Hora de salida",         key: "start_hour" },
+  { label: "Horas sueño (noche previa)", key: "sleep_hours_prev" },
+  { label: "Score sueño",            key: "sleep_score_prev" },
+  { label: "REM %",                  key: "rem_pct_prev" },
+  { label: "Hora acostarse",         key: "bedtime_prev" },
+  { label: "HRV matinal",            key: "hrv_morning" },
+  { label: "FC media",               key: "hr" },
+  { label: "Ritmo (s/km)",           key: "pace_s" },
+  { label: "EF",                     key: "ef" },
+  { label: "Km",                     key: "km" },
+];
+
+function renderScatter(xKey, yKey, isBedtimePreset) {
+  const selX = document.getElementById("scatterX");
+  const selY = document.getElementById("scatterY");
+  if (!selX || !selY) return;
+
+  // Populate selects once
+  if (!_scatterSelectsPopulated) {
+    SCATTER_VARS.forEach((v) => {
+      const ox = document.createElement("option");
+      ox.value = v.key; ox.textContent = v.label;
+      selX.appendChild(ox);
+      const oy = document.createElement("option");
+      oy.value = v.key; oy.textContent = v.label;
+      selY.appendChild(oy);
+    });
+    // Defaults: X=temp_c, Y=hr
+    selX.value = "temp_c";
+    selY.value = "hr";
+    _scatterSelectsPopulated = true;
+
+    // Wire change events
+    selX.addEventListener("change", () => renderScatter());
+    selY.addEventListener("change", () => renderScatter());
+
+    // Wire preset buttons
+    document.querySelectorAll(".preset[data-preset]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const p = btn.dataset.preset;
+        if (p === "heat") {
+          selX.value = "temp_c"; selY.value = "hr";
+          renderScatter("temp_c", "hr", false);
+        } else if (p === "sleep") {
+          selX.value = "sleep_score_prev"; selY.value = "ef";
+          renderScatter("sleep_score_prev", "ef", false);
+        } else if (p === "bedtime") {
+          renderScatter("bedtime", "sleep_score", true);
+        }
+      });
+    });
+  }
+
+  const usedXKey = xKey || selX.value;
+  const usedYKey = yKey || selY.value;
+  const r2El = document.getElementById("scatterR2");
+
+  let pts;
+  if (isBedtimePreset) {
+    // Special case: use dailies — (bedtime, sleep_score)
+    const fDaily = daily.filter((d) => inRange(d.date));
+    pts = fDaily
+      .filter((d) => d.bedtime != null && d.sleep_score != null)
+      .map((d) => ({ x: d.bedtime, y: d.sleep_score }));
+  } else {
+    const fRuns = runs.filter((r) => inRange(r.date));
+    pts = fRuns
+      .filter((r) => r[usedXKey] != null && r[usedYKey] != null)
+      .map((r) => ({ x: r[usedXKey], y: r[usedYKey] }));
+  }
+
+  destroyChart("scatter");
+
+  if (pts.length < 3) {
+    if (r2El) r2El.textContent = "datos insuficientes";
+    return;
+  }
+
+  // Linear regression
+  const reg = linreg(pts);
+  const xVals = pts.map((p) => p.x);
+  const xMin = Math.min(...xVals);
+  const xMax = Math.max(...xVals);
+  const trendPts = [
+    { x: xMin, y: reg.a + reg.b * xMin },
+    { x: xMax, y: reg.a + reg.b * xMax },
+  ];
+
+  if (r2El) r2El.textContent = `R² = ${reg.r2.toFixed(2)} · n=${pts.length}`;
+
+  registerChart(
+    "scatter",
+    new Chart(document.getElementById("scatter"), {
+      type: "scatter",
+      data: {
+        datasets: [
+          {
+            label: "datos",
+            data: pts,
+            backgroundColor: "#4dd0a688",
+            pointRadius: 5,
+          },
+          {
+            label: "tendencia",
+            data: trendPts,
+            type: "line",
+            borderColor: "#f6a35b",
+            borderWidth: 1.5,
+            borderDash: [5, 4],
+            pointRadius: 0,
+            tension: 0,
+          },
+        ],
+      },
+      options: {
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `(${ctx.parsed.x.toFixed(2)}, ${ctx.parsed.y.toFixed(2)})`,
+            },
+          },
+        },
+        scales: {
+          x: { grid: { color: GRID }, title: { display: true, text: isBedtimePreset ? "Hora acostarse" : (SCATTER_VARS.find((v) => v.key === usedXKey) || {}).label || usedXKey } },
+          y: { grid: { color: GRID }, title: { display: true, text: isBedtimePreset ? "Score sueño" : (SCATTER_VARS.find((v) => v.key === usedYKey) || {}).label || usedYKey } },
+        },
+      },
+    })
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// renderHeatmap — GitHub-style activity calendar (Task 8)
+// Uses full allActivities (no range filter), from meta.first_date to today.
+// ─────────────────────────────────────────────────────────────────────────────
 function renderHeatmap() {
-  // Task 8
+  const container = document.getElementById("heatmap");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const firstDate = meta.first_date ? new Date(meta.first_date) : new Date();
+  const today = new Date();
+
+  // Build day→activity map
+  // { dateStr: { km: number, type: 'running'|'other', ids: [] } }
+  const dayMap = {};
+  for (const act of allActivities) {
+    const ds = act.date;
+    if (!dayMap[ds]) dayMap[ds] = { km: 0, types: new Set(), ids: [] };
+    if (act.type === "running" && act.km) dayMap[ds].km += act.km;
+    dayMap[ds].types.add(act.type);
+    if (act.type === "running" && act.id) dayMap[ds].ids.push(act.id);
+  }
+
+  // Determine start (Monday of first week) and end (Sunday of last week)
+  // We'll show from Monday of the week containing firstDate to today
+  const startMonday = new Date(firstDate);
+  // getDay(): 0=Sun, 1=Mon ... 6=Sat → offset to Monday
+  const dow = startMonday.getDay(); // 0=Sun
+  const offsetToMon = dow === 0 ? -6 : 1 - dow;
+  startMonday.setDate(startMonday.getDate() + offsetToMon);
+
+  // Build array of ISO weeks (each week = [Mon..Sun] dates)
+  const weeks = [];
+  const cur = new Date(startMonday);
+  while (cur <= today) {
+    const week = [];
+    for (let d = 0; d < 7; d++) {
+      week.push(new Date(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    weeks.push(week);
+  }
+
+  // Month label row
+  // We need one <div class="hm-row"> for month labels, one row per weekday
+  // Layout: columns = weeks, rows = Mon(0)..Sun(6)
+  // We'll build a grid: first a label row (month names at first week of each month),
+  // then 7 day rows.
+
+  // Wrapper uses CSS grid (columns = number of weeks)
+  const grid = document.createElement("div");
+  grid.style.display = "grid";
+  grid.style.gridTemplateColumns = `repeat(${weeks.length}, 16px)`;
+  grid.style.gap = "3px 3px";
+  grid.style.rowGap = "3px";
+  grid.style.overflowX = "auto";
+
+  // Month-label row (row 1)
+  const MONTH_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  for (let wi = 0; wi < weeks.length; wi++) {
+    const monDay = weeks[wi][0]; // Monday of this week
+    const label = document.createElement("div");
+    label.className = "hm-label";
+    label.style.gridColumn = `${wi + 1}`;
+    label.style.gridRow = "1";
+    // Show month label only on first week of each month
+    if (monDay.getDate() <= 7) {
+      label.textContent = MONTH_ES[monDay.getMonth()];
+    }
+    grid.appendChild(label);
+  }
+
+  // Day rows (rows 2–8: Mon=2, Tue=3, ..., Sun=8)
+  for (let wi = 0; wi < weeks.length; wi++) {
+    for (let di = 0; di < 7; di++) {
+      const day = weeks[wi][di];
+      if (day > today) continue; // don't render future days
+
+      const ds = day.toISOString().slice(0, 10);
+      const act = dayMap[ds];
+
+      const cell = document.createElement("div");
+      cell.className = "hm-cell";
+      cell.style.gridColumn = `${wi + 1}`;
+      cell.style.gridRow = `${di + 2}`;
+
+      const ddmm = `${String(day.getDate()).padStart(2,"0")}/${String(day.getMonth()+1).padStart(2,"0")}`;
+
+      if (act) {
+        const hasRun = act.types.has("running");
+        const hasOther = [...act.types].some((t) => t !== "running");
+        if (hasRun) {
+          if (act.km < 3) cell.classList.add("hm-run1");
+          else if (act.km < 5) cell.classList.add("hm-run2");
+          else cell.classList.add("hm-run3");
+          cell.title = `${ddmm} · ${act.km.toFixed(1)} km`;
+          // Click → open modal if exactly one run that day
+          if (act.ids.length === 1) {
+            cell.style.cursor = "pointer";
+            const runId = act.ids[0];
+            cell.addEventListener("click", () => openRunModal(runId));
+          }
+        } else if (hasOther) {
+          cell.classList.add("hm-other");
+          const firstType = [...act.types][0];
+          cell.title = `${ddmm} · ${firstType}`;
+        }
+      }
+
+      grid.appendChild(cell);
+    }
+  }
+
+  container.appendChild(grid);
 }
 
-// Task 8: today panel / semáforo recommendation
+// ─────────────────────────────────────────────────────────────────────────────
+// renderToday — semáforo / training recommendation (Task 8)
+// ─────────────────────────────────────────────────────────────────────────────
 function renderToday() {
-  // Task 8
+  const lightEl = document.getElementById("todayLight");
+  const msgEl = document.getElementById("todayMsg");
+  const reasonsEl = document.getElementById("todayReasons");
+  if (!lightEl || !msgEl || !reasonsEl) return;
+
+  const today = daily[daily.length - 1] || {};
+  const lastRun = runs[runs.length - 1];
+  const daysSince = lastRun
+    ? Math.floor((Date.now() - new Date(lastRun.date)) / 864e5)
+    : 99;
+  const low = (status.hrv_baseline || {}).balancedLow ?? 45;
+
+  let color = "verde";
+  let msg = "Corre hoy (Z2 suave)";
+  const reasons = [];
+
+  // Rojo conditions (highest priority)
+  if (today.party) {
+    color = "rojo";
+    msg = "Descansa hoy";
+    reasons.push("noche de fiesta detectada");
+  } else if (today.hrv != null && today.hrv < low) {
+    color = "rojo";
+    msg = "Descansa hoy";
+    reasons.push(`HRV ${today.hrv} bajo baseline (${low})`);
+  } else if (today.sleep_score != null && today.sleep_score < 40) {
+    color = "rojo";
+    msg = "Descansa hoy";
+    reasons.push(`sueño ${today.sleep_score} POOR`);
+  }
+
+  // Ámbar conditions (if not already rojo)
+  if (color !== "rojo") {
+    if (daysSince === 0) {
+      color = "ambar";
+      msg = "Ya corriste hoy — descansa";
+    } else if (
+      (today.sleep_score != null && today.sleep_score < 55) ||
+      (today.hrv != null && today.hrv < low + 7)
+    ) {
+      color = "ambar";
+      msg = "Suave u opcional: fuerza";
+      reasons.push("recuperación a medias");
+    }
+  }
+
+  // Verde bonus: hasn't run in 3+ days
+  if (color === "verde" && daysSince >= 3) {
+    reasons.push(`${daysSince} días sin correr — toca salir`);
+  }
+
+  // Apply to DOM
+  const dot = lightEl.querySelector(".light") || lightEl;
+  if (dot.classList) {
+    dot.classList.remove("verde", "ambar", "rojo");
+    dot.classList.add(color);
+  }
+  msgEl.textContent = msg;
+  reasonsEl.innerHTML = "";
+  for (const r of reasons) {
+    const li = document.createElement("li");
+    li.textContent = r;
+    reasonsEl.appendChild(li);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
