@@ -21,6 +21,7 @@ running-dashboard/  (repo privado github.com/Braveras/running-dashboard)
 │   └── fetch_data.py     # diario en CI: descarga incremental → data/*.json
 ├── data/                 # JSON commiteados (histórico acumulado)
 │   ├── runs.json         # lista carreras: fecha, km, dur, pace, FC avg/max, cadencia, calorías
+│   ├── all_activities.json # todas las actividades (fecha, tipo, duración) — para el heatmap
 │   ├── runs_detail.json  # por activity_id: splits, zonas FC, clima, potencia
 │   ├── daily.json        # por fecha: sueño (score, horas, fases, hora dormir), HRV (+baseline), body battery, estrés, peso
 │   ├── status.json       # training status actual: cargas, VO2max, ACWR
