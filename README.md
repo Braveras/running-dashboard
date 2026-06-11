@@ -11,7 +11,9 @@ Dashboard de progreso running con datos de Garmin Connect, auto-actualizado a di
 
 ## Token caducado (~1 año)
 
-Re-ejecutar `scripts/login.py` y actualizar el secret `GARMIN_TOKENS`.
+Re-ejecutar `scripts/login.py` y actualizar el secret `GARMIN_TOKENS_B64` con el comando que imprime.
+
+Dashboard: https://braveras.github.io/running-dashboard/
 
 ## Estructura
 

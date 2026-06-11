@@ -5,6 +5,7 @@ NOTE (garminconnect 0.3.5): tokens are stored on garmin.client (GarminClient),
 not garmin.garth. garmin.client.dumps() serialises di_token / di_refresh_token /
 di_client_id to JSON; garmin.client.loads() reverses it.
 """
+import base64
 import getpass
 import os
 
@@ -27,9 +28,10 @@ def main():
     with open(TOKEN_FILE, "w") as f:
         f.write(token_json)
 
+    token_b64 = base64.b64encode(token_json.encode()).decode()
     print(f"\nToken guardado en {os.path.abspath(TOKEN_FILE)} (gitignored).")
-    print("Ahora ejecuta:\n")
-    print(f'  gh secret set GARMIN_TOKENS --repo Braveras/running-dashboard --body-file "{os.path.abspath(TOKEN_FILE)}"')
+    print("Ahora ejecuta (PowerShell, sin pipes — corrompen la codificación):\n")
+    print(f'  gh secret set GARMIN_TOKENS_B64 --repo Braveras/running-dashboard -b "{token_b64}"')
 
 
 if __name__ == "__main__":
