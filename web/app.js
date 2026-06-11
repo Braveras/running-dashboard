@@ -12,6 +12,15 @@ Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
 Chart.defaults.font.size = 11;
 const GRID = "#222b3a";
 
+// ── Mobile detection + responsive defaults ────────────────────────────────
+const isMobile = window.matchMedia("(max-width: 500px)").matches;
+if (isMobile) {
+  Chart.defaults.font.size = 10;
+}
+
+// ── Touch-friendly tooltip interaction ───────────────────────────────────
+Chart.defaults.interaction = { mode: "nearest", intersect: false };
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -163,6 +172,20 @@ async function init() {
         renderAll();
       });
     });
+
+    // Mobile defaults: start at 30d range + reduce x-axis tick density
+    if (isMobile) {
+      rangeDays = 30;
+      document.querySelectorAll(".range-btn").forEach((b) => b.classList.remove("active"));
+      const btn30 = document.querySelector(".range-btn[data-days='30']");
+      if (btn30) btn30.classList.add("active");
+      Chart.defaults.scales = Chart.defaults.scales || {};
+      ["category", "linear", "time", "timeseries"].forEach((type) => {
+        Chart.defaults.scales[type] = Chart.defaults.scales[type] || {};
+        Chart.defaults.scales[type].ticks = Chart.defaults.scales[type].ticks || {};
+        Chart.defaults.scales[type].ticks.maxTicksLimit = 6;
+      });
+    }
 
     renderAll();
   } catch (err) {
@@ -1316,6 +1339,7 @@ function renderScatter(xKey, yKey, isBedtimePreset) {
         ],
       },
       options: {
+        interaction: { mode: "nearest", intersect: true },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -1395,6 +1419,7 @@ function renderHeatmap() {
   grid.style.gap = "3px 3px";
   grid.style.rowGap = "3px";
   grid.style.overflowX = "auto";
+  grid.style.minWidth = "max-content";
 
   // Month-label row (row 1)
   const MONTH_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];

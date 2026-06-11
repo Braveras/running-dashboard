@@ -428,3 +428,24 @@ footer {
   margin-left: 6px;
   vertical-align: middle;
 }
+
+/* ── Mobile overrides (≤600px) ───────────────────────────── */
+
+@media (max-width: 600px) {
+  body {
+    padding: 12px;
+  }
+
+  .grid.stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .modal-panel {
+    max-width: 96vw;
+    padding: 12px;
+  }
+
+  .splits-table {
+    font-size: 11px;
+  }
+}
