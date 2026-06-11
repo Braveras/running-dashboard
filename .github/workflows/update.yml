@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install garminconnect
+      - run: pip install "garminconnect==0.3.5" tzdata
       - name: Fetch Garmin data
         env:
           GARMIN_TOKENS: ${{ secrets.GARMIN_TOKENS }}
