@@ -1305,7 +1305,7 @@
  },
  {
   "bb_charged": 59,
-  "bb_drained": 44,
+  "bb_drained": 54,
   "bedtime": 1.25,
   "date": "2026-06-11",
   "deep_pct": 15.3,
@@ -1316,5 +1316,19 @@
   "sleep_hours": 6.85,
   "sleep_score": 68,
   "sleep_stress": 20.0
+ },
+ {
+  "bb_charged": 76,
+  "bb_drained": 43,
+  "bedtime": 1.22,
+  "date": "2026-06-12",
+  "deep_pct": 20.0,
+  "hrv": 64,
+  "hrv_status": "BALANCED",
+  "party": false,
+  "rem_pct": 7.4,
+  "sleep_hours": 6.08,
+  "sleep_score": 58,
+  "sleep_stress": 9.0
  }
 ]
