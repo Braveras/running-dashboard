@@ -47,22 +47,24 @@ def get_client():
     if not token:
         sys.exit("Sin token: define GARMIN_TOKENS o ejecuta scripts/login.py")
 
-    # Garmin bloquea la llamada a "social profile" desde IPs de datacenter (CI).
-    # client.loads() restaura la sesión OAuth SIN tocar el perfil; inyectamos
+    # En CI evitamos /userprofile-service (login() lo llama para validar y NO
+    # aporta nada que no tengamos): client.loads() restaura la sesión e inyectamos
     # display_name/unit_system cacheados (display_name = UUID, no es sensible).
+    # El di_token (acceso) caduca en ~horas; entre runs diarios estará caducado,
+    # así que lo refrescamos con el di_refresh_token (vida ~1 año si solo CI lo usa)
+    # y al final del run se re-guarda el token rotado en el secret (ver dump_token).
     display_name = os.environ.get("GARMIN_DISPLAY_NAME")
     g = Garmin()
     last_err = None
     for intento in range(3):
         try:
             if display_name:
-                # client.loads() restaura la sesión SIN tocar /userprofile-service
-                # (Garmin lo bloquea desde IPs de datacenter/CI). NO forzar refresh:
-                # el di_refresh_token del secret rota con el uso local y queda muerto;
-                # el di_token de acceso basta mientras no caduque (runs cortos).
                 g.client.loads(token)
                 g.display_name = display_name
                 g.unit_system = os.environ.get("GARMIN_UNIT_SYSTEM", "metric")
+                if g.client._token_expires_soon():
+                    print("  di_token caduca pronto -> refrescando")
+                    g.client._refresh_di_token()
             else:
                 g.login(tokenstore=token)  # local: carga perfil normalmente
             return g
@@ -70,6 +72,21 @@ def get_client():
             last_err = e
             print(f"  login intento {intento + 1}/3 falló: {type(e).__name__}: {e}")
     sys.exit(f"Login Garmin falló tras 3 intentos: {type(last_err).__name__}: {last_err}")
+
+
+def dump_token(g):
+    """Vuelca el token actual (posiblemente rotado tras refresh) al path de
+    TOKEN_OUT, para que el workflow lo re-guarde en el secret y la cadena
+    sobreviva entre runs diarios. Sin TOKEN_OUT (local), no hace nada."""
+    out = os.environ.get("TOKEN_OUT")
+    if not out:
+        return
+    try:
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(g.client.dumps())
+        print(f"  token volcado a {out}")
+    except Exception as e:
+        print(f"  warn: dump_token falló: {type(e).__name__}: {e}")
 
 
 def safe(fn, *args, default=None):
@@ -282,6 +299,7 @@ def main():
     save_json("status.json", status)
     save_json("meta.json", {"updated": datetime.now().isoformat(timespec="seconds"),
                             "first_date": FIRST_DATE})
+    dump_token(g)
     print("OK")
 
 
