@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TZ: Europe/Madrid
+      HAS_PAT: ${{ secrets.ACTIONS_PAT != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -35,7 +36,7 @@ jobs:
           python scripts/fetch_data.py
           rm .garmin_tokens
       - name: Rotate token secret
-        if: ${{ secrets.ACTIONS_PAT != '' }}
+        if: env.HAS_PAT == 'true'
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PAT }}
         run: |
