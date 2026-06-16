@@ -28,6 +28,7 @@ jobs:
       - name: Fetch Garmin data
         env:
           GARMIN_TOKENS_B64: ${{ secrets.GARMIN_TOKENS_B64 }}
+          GARMIN_DISPLAY_NAME: ${{ secrets.GARMIN_DISPLAY_NAME }}
         run: |
           echo "$GARMIN_TOKENS_B64" | base64 -d > .garmin_tokens
           python scripts/fetch_data.py

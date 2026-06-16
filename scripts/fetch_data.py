@@ -46,12 +46,26 @@ def get_client():
                 token = f.read().strip()
     if not token:
         sys.exit("Sin token: define GARMIN_TOKENS o ejecuta scripts/login.py")
+
+    # Garmin bloquea la llamada a "social profile" desde IPs de datacenter (CI).
+    # client.loads() restaura la sesión OAuth SIN tocar el perfil; inyectamos
+    # display_name/unit_system cacheados (display_name = UUID, no es sensible).
+    display_name = os.environ.get("GARMIN_DISPLAY_NAME")
     g = Garmin()
-    try:
-        g.login(tokenstore=token)
-    except Exception as e:
-        sys.exit(f"Login Garmin falló (token caducado?): {type(e).__name__}: {e}")
-    return g
+    last_err = None
+    for intento in range(3):
+        try:
+            if display_name:
+                g.garth.loads(token) if hasattr(g, "garth") else g.client.loads(token)
+                g.display_name = display_name
+                g.unit_system = os.environ.get("GARMIN_UNIT_SYSTEM", "metric")
+            else:
+                g.login(tokenstore=token)  # local: carga perfil normalmente
+            return g
+        except Exception as e:
+            last_err = e
+            print(f"  login intento {intento + 1}/3 falló: {type(e).__name__}: {e}")
+    sys.exit(f"Login Garmin falló tras 3 intentos: {type(last_err).__name__}: {last_err}")
 
 
 def safe(fn, *args, default=None):
