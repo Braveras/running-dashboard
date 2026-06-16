@@ -56,16 +56,13 @@ def get_client():
     for intento in range(3):
         try:
             if display_name:
+                # client.loads() restaura la sesión SIN tocar /userprofile-service
+                # (Garmin lo bloquea desde IPs de datacenter/CI). NO forzar refresh:
+                # el di_refresh_token del secret rota con el uso local y queda muerto;
+                # el di_token de acceso basta mientras no caduque (runs cortos).
                 g.client.loads(token)
                 g.display_name = display_name
                 g.unit_system = os.environ.get("GARMIN_UNIT_SYSTEM", "metric")
-                # DIAGNÓSTICO: forzar refresh del di_token (descarta token caducado
-                # como causa del 401 en /activitylist-service desde IP datacenter)
-                try:
-                    g.client._refresh_di_token()
-                    print("  di_token refrescado OK")
-                except Exception as re:
-                    print(f"  refresh di_token falló: {type(re).__name__}: {re}")
             else:
                 g.login(tokenstore=token)  # local: carga perfil normalmente
             return g
