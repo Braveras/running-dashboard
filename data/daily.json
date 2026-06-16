@@ -1333,7 +1333,7 @@
  },
  {
   "bb_charged": 77,
-  "bb_drained": 1,
+  "bb_drained": 77,
   "bedtime": 2.08,
   "date": "2026-06-13",
   "deep_pct": 14.9,
@@ -1343,15 +1343,49 @@
   "rem_pct": 13.1,
   "sleep_hours": 6.48,
   "sleep_score": 74,
-  "sleep_stress": 10.0
+  "sleep_stress": 10.0,
+  "weight_kg": 84.0
  },
  {
-  "date": "2026-06-14"
+  "bb_charged": 63,
+  "bb_drained": 63,
+  "bedtime": 1.88,
+  "date": "2026-06-14",
+  "deep_pct": 15.1,
+  "hrv": 58,
+  "hrv_status": "BALANCED",
+  "party": false,
+  "rem_pct": 16.5,
+  "sleep_hours": 6.85,
+  "sleep_score": 70,
+  "sleep_stress": 16.0
  },
  {
-  "date": "2026-06-15"
+  "bb_charged": 55,
+  "bb_drained": 55,
+  "bedtime": 1.33,
+  "date": "2026-06-15",
+  "deep_pct": 31.2,
+  "hrv": 61,
+  "hrv_status": "BALANCED",
+  "party": false,
+  "rem_pct": 0.0,
+  "sleep_hours": 5.07,
+  "sleep_score": 50,
+  "sleep_stress": 12.0
  },
  {
-  "date": "2026-06-16"
+  "bb_charged": 74,
+  "bb_drained": 1,
+  "bedtime": 0.02,
+  "date": "2026-06-16",
+  "deep_pct": 15.6,
+  "hrv": 67,
+  "hrv_status": "BALANCED",
+  "party": false,
+  "rem_pct": 9.7,
+  "sleep_hours": 6.73,
+  "sleep_score": 61,
+  "sleep_stress": 13.0
  }
 ]
