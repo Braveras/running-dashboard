@@ -56,9 +56,16 @@ def get_client():
     for intento in range(3):
         try:
             if display_name:
-                g.garth.loads(token) if hasattr(g, "garth") else g.client.loads(token)
+                g.client.loads(token)
                 g.display_name = display_name
                 g.unit_system = os.environ.get("GARMIN_UNIT_SYSTEM", "metric")
+                # DIAGNÓSTICO: forzar refresh del di_token (descarta token caducado
+                # como causa del 401 en /activitylist-service desde IP datacenter)
+                try:
+                    g.client._refresh_di_token()
+                    print("  di_token refrescado OK")
+                except Exception as re:
+                    print(f"  refresh di_token falló: {type(re).__name__}: {re}")
             else:
                 g.login(tokenstore=token)  # local: carga perfil normalmente
             return g
