@@ -1,12 +1,12 @@
 {
- "acute_load": 46,
+ "acute_load": 37,
  "chronic_load": 137,
- "date": "2026-06-17",
+ "date": "2026-06-18",
  "hrv_baseline": {
   "balancedLow": 46,
   "balancedUpper": 83,
   "lowUpper": 40,
-  "markerValue": 0.46620178
+  "markerValue": 0.49324036
  },
  "optimal_max": 205.5,
  "optimal_min": 109.60000000000001,
