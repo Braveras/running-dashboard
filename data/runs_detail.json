@@ -2118,5 +2118,71 @@
     "zone": 5
    }
   ]
+ },
+ "23298346039": {
+  "splits": [
+   {
+    "cadence": 152,
+    "dur_s": 434,
+    "elev_gain": 20.0,
+    "elev_loss": 2.0,
+    "hr": 148.0,
+    "hr_max": 162.0,
+    "km": 1.0,
+    "power": 304.0
+   },
+   {
+    "cadence": 138,
+    "dur_s": 493,
+    "elev_gain": 4.0,
+    "elev_loss": 9.0,
+    "hr": 141.0,
+    "hr_max": 154.0,
+    "km": 1.0,
+    "power": 214.0
+   },
+   {
+    "cadence": 128,
+    "dur_s": 422,
+    "elev_gain": 5.0,
+    "elev_loss": 11.0,
+    "hr": 147.0,
+    "hr_max": 158.0,
+    "km": 0.78,
+    "power": 203.0
+   }
+  ],
+  "weather": {
+   "humidity": 14,
+   "temp_c": 32.8,
+   "temp_raw": 91
+  },
+  "zones": [
+   {
+    "low": 102,
+    "secs": 20,
+    "zone": 1
+   },
+   {
+    "low": 122,
+    "secs": 425,
+    "zone": 2
+   },
+   {
+    "low": 142,
+    "secs": 891,
+    "zone": 3
+   },
+   {
+    "low": 162,
+    "secs": 1,
+    "zone": 4
+   },
+   {
+    "low": 183,
+    "secs": 0,
+    "zone": 5
+   }
+  ]
  }
 }
