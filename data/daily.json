@@ -1642,8 +1642,13 @@
   "sleep_stress": 34.0
  },
  {
-  "bb_charged": 0,
+  "bb_charged": 45,
   "bb_drained": 0,
   "date": "2026-07-05"
+ },
+ {
+  "bb_charged": 0,
+  "bb_drained": 27,
+  "date": "2026-07-06"
  }
 ]
