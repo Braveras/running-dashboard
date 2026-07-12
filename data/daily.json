@@ -1709,7 +1709,7 @@
  },
  {
   "bb_charged": 1,
-  "bb_drained": 0,
+  "bb_drained": 1,
   "bedtime": 7.02,
   "date": "2026-07-11",
   "deep_pct": 36.8,
@@ -1720,5 +1720,10 @@
   "sleep_hours": 2.22,
   "sleep_score": 16,
   "sleep_stress": 69.0
+ },
+ {
+  "bb_charged": 9,
+  "bb_drained": 3,
+  "date": "2026-07-12"
  }
 ]
