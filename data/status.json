@@ -1,7 +1,7 @@
 {
- "acute_load": 8,
+ "acute_load": 32,
  "chronic_load": 137,
- "date": "2026-07-14",
+ "date": "2026-07-15",
  "hrv_baseline": {
   "balancedLow": 52,
   "balancedUpper": 85,
@@ -10,6 +10,6 @@
  },
  "optimal_max": 205.5,
  "optimal_min": 109.60000000000001,
- "status_feedback": "DETRAINING",
- "vo2max": 45.3
+ "status_feedback": "PEAKING_1",
+ "vo2max": 45.2
 }
