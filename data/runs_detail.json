@@ -2590,5 +2590,157 @@
     "zone": 5
    }
   ]
+ },
+ "23623550153": {
+  "splits": [
+   {
+    "cadence": 154,
+    "dur_s": 444,
+    "elev_gain": 3.0,
+    "elev_loss": 9.0,
+    "hr": 135.0,
+    "hr_max": 146.0,
+    "km": 1.0,
+    "power": 283.0
+   },
+   {
+    "cadence": 127,
+    "dur_s": 595,
+    "elev_gain": 14.0,
+    "elev_loss": 14.0,
+    "hr": 132.0,
+    "hr_max": 148.0,
+    "km": 1.0,
+    "power": 191.0
+   },
+   {
+    "cadence": 149,
+    "dur_s": 525,
+    "elev_gain": 4.0,
+    "elev_loss": 12.0,
+    "hr": 140.0,
+    "hr_max": 151.0,
+    "km": 1.0,
+    "power": 224.0
+   },
+   {
+    "cadence": 154,
+    "dur_s": 156,
+    "elev_gain": 0.0,
+    "elev_loss": 6.0,
+    "hr": 149.0,
+    "hr_max": 151.0,
+    "km": 0.32,
+    "power": 230.0
+   }
+  ],
+  "weather": {
+   "humidity": 19,
+   "temp_c": 32.8,
+   "temp_raw": 91
+  },
+  "zones": [
+   {
+    "low": 100,
+    "secs": 119,
+    "zone": 1
+   },
+   {
+    "low": 120,
+    "secs": 695,
+    "zone": 2
+   },
+   {
+    "low": 140,
+    "secs": 895,
+    "zone": 3
+   },
+   {
+    "low": 160,
+    "secs": 0,
+    "zone": 4
+   },
+   {
+    "low": 180,
+    "secs": 0,
+    "zone": 5
+   }
+  ]
+ },
+ "23683481534": {
+  "splits": [
+   {
+    "cadence": 143,
+    "dur_s": 499,
+    "elev_gain": 4.0,
+    "elev_loss": 9.0,
+    "hr": 135.0,
+    "hr_max": 150.0,
+    "km": 1.0,
+    "power": 231.0
+   },
+   {
+    "cadence": 139,
+    "dur_s": 548,
+    "elev_gain": 11.0,
+    "elev_loss": 11.0,
+    "hr": 140.0,
+    "hr_max": 152.0,
+    "km": 1.0,
+    "power": 206.0
+   },
+   {
+    "cadence": 137,
+    "dur_s": 585,
+    "elev_gain": 4.0,
+    "elev_loss": 10.0,
+    "hr": 136.0,
+    "hr_max": 148.0,
+    "km": 1.0,
+    "power": 190.0
+   },
+   {
+    "cadence": 124,
+    "dur_s": 416,
+    "elev_gain": 5.0,
+    "elev_loss": 8.0,
+    "hr": 137.0,
+    "hr_max": 150.0,
+    "km": 0.65,
+    "power": 162.0
+   }
+  ],
+  "weather": {
+   "humidity": 15,
+   "temp_c": 35.0,
+   "temp_raw": 95
+  },
+  "zones": [
+   {
+    "low": 100,
+    "secs": 52,
+    "zone": 1
+   },
+   {
+    "low": 120,
+    "secs": 1059,
+    "zone": 2
+   },
+   {
+    "low": 140,
+    "secs": 938,
+    "zone": 3
+   },
+   {
+    "low": 160,
+    "secs": 0,
+    "zone": 4
+   },
+   {
+    "low": 180,
+    "secs": 0,
+    "zone": 5
+   }
+  ]
  }
 }
