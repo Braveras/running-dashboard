@@ -2,272 +2,302 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Running — Alejandro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0e1116">
+  <title>Zona Dos · Cuaderno de entrenamiento</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════
-     HEADER
-══════════════════════════════════════════════════════ -->
-<h1>🏃 Dashboard Running — Alejandro</h1>
-<p class="sub">Madrid · datos Garmin · <span id="updated"></span></p>
-
-<!-- ══════════════════════════════════════════════════════
-     RANGE SELECTOR
-══════════════════════════════════════════════════════ -->
-<div id="rangeSel">
-  <button class="range-btn" data-days="7">7d</button>
-  <button class="range-btn" data-days="30">30d</button>
-  <button class="range-btn" data-days="90">90d</button>
-  <button class="range-btn active" data-days="all">Todo</button>
-</div>
-
-<!-- ══════════════════════════════════════════════════════
-     TODAY / SEMÁFORO PANEL
-══════════════════════════════════════════════════════ -->
-<section id="today" class="card">
-  <div id="todayLight">
-    <span class="light ambar"></span>
-  </div>
-  <div>
-    <div id="todayMsg">Cargando recomendación del día…</div>
-    <ul id="todayReasons"></ul>
-  </div>
-</section>
-
-<!-- ══════════════════════════════════════════════════════
-     STATS GRID
-══════════════════════════════════════════════════════ -->
-<div class="grid stats">
-
-  <div class="stat">
-    <div class="v" id="cardKm">—</div>
-    <div class="l">Distancia total</div>
+  <!-- Banner de error global (oculto por defecto; app.js lo muestra si falla algún fetch o el vendor) -->
+  <div id="errorBanner" class="error-banner" role="alert" hidden>
+    <span id="errorMsg"></span>
+    <button id="retryBtn" type="button">Reintentar</button>
   </div>
 
-  <div class="stat">
-    <div class="v" id="cardRuns">—</div>
-    <div class="l">Carreras</div>
-  </div>
+  <header class="site-header">
+    <h1>Zona Dos</h1>
+    <p class="subtitle">Cuaderno de entrenamiento · Madrid</p>
+    <!-- Insight del día: lo rellena app.js desde insights.js (fallback neutro incluido allí) -->
+    <p id="insightDia" class="insight-dia"></p>
+  </header>
 
-  <div class="stat">
-    <div class="v" id="cardTime">—</div>
-    <div class="l">Tiempo corriendo</div>
-  </div>
-
-  <div class="stat alt">
-    <div class="v" id="cardVo2">—</div>
-    <div class="l">VO₂max actual</div>
-  </div>
-
-  <div class="stat alt">
-    <div class="v" id="cardStreak">—</div>
-    <div class="l">Carreras/sem (4 sem)</div>
-  </div>
-
-  <div class="stat warn">
-    <div class="v" id="cardMonth">—</div>
-    <div class="l">Km este mes vs anterior</div>
-  </div>
-
-</div>
-
-<!-- ══════════════════════════════════════════════════════
-     CHART: DISTANCIA POR CARRERA  (full width)
-══════════════════════════════════════════════════════ -->
-<div class="card">
-  <h2>Distancia por carrera</h2>
-  <p class="note">Cada barra es una salida. La línea muestra la media móvil de 4 carreras.</p>
-  <canvas id="dist"></canvas>
-</div>
-
-<!-- ══════════════════════════════════════════════════════
-     CHART: RITMO vs PULSO  (full width)
-══════════════════════════════════════════════════════ -->
-<div class="card">
-  <h2>Ritmo vs Pulso medio <span class="badge">eficiencia aeróbica</span></h2>
-  <p class="note">Buen signo: FC bajando sin que el ritmo suba — señal de adaptación aeróbica.</p>
-  <canvas id="pacehr"></canvas>
-</div>
-
-<!-- ══════════════════════════════════════════════════════
-     TWO-COLUMN: FC MÁXIMA · VOLUMEN MENSUAL
-══════════════════════════════════════════════════════ -->
-<div class="grid two">
-
-  <div class="card">
-    <h2>FC máxima por carrera <span class="badge">control de intensidad</span></h2>
-    <p class="note">Línea roja discontinua = techo teórico Z2. Cuanto más por debajo, mejor control.</p>
-    <canvas id="maxhr"></canvas>
-  </div>
-
-  <div class="card">
-    <h2>Volumen mensual</h2>
-    <p class="note">Kilómetros y número de carreras agrupados por mes.</p>
-    <canvas id="monthly"></canvas>
-  </div>
-
-</div>
-
-<!-- ══════════════════════════════════════════════════════
-     TWO-COLUMN: EFICIENCIA AERÓBICA · SUEÑO
-══════════════════════════════════════════════════════ -->
-<div class="grid two">
-
-  <div class="card">
-    <h2>Factor de Eficiencia (EF)</h2>
-    <p class="note">Ritmo relativo por latido — sube cuando el cuerpo trabaja más eficientemente.</p>
-    <canvas id="ef"></canvas>
-  </div>
-
-  <div class="card">
-    <h2>HRV nocturno <span class="badge">recuperación</span></h2>
-    <p class="note">Variabilidad del ritmo cardíaco en reposo — valores altos indican mejor recuperación.</p>
-    <canvas id="hrv"></canvas>
-  </div>
-
-</div>
-
-<!-- ══════════════════════════════════════════════════════
-     CHART: SUEÑO  (full width)
-══════════════════════════════════════════════════════ -->
-<div class="card">
-  <h2>Sueño nocturno</h2>
-  <p class="note">Horas de sueño por noche con desglose de fases (profundo, REM, ligero).</p>
-  <canvas id="sleep"></canvas>
-</div>
-
-<!-- ══════════════════════════════════════════════════════
-     TWO-COLUMN: BODY BATTERY · CARGA DE ENTRENAMIENTO
-══════════════════════════════════════════════════════ -->
-<div class="grid two">
-
-  <div class="card">
-    <h2>Body Battery</h2>
-    <p class="note">Nivel de energía estimado al despertar — 70+ es ideal para entrenar.</p>
-    <canvas id="bb"></canvas>
-  </div>
-
-  <div class="card">
-    <h2>Carga de entrenamiento</h2>
-    <p class="note">Carga aguda (7d) vs crónica (28d) — ratio &lt;1.3 reduce riesgo de lesión.</p>
-    <canvas id="load"></canvas>
-  </div>
-
-</div>
-
-<!-- ══════════════════════════════════════════════════════
-     TWO-COLUMN: CADENCIA · PESO
-══════════════════════════════════════════════════════ -->
-<div class="grid two">
-
-  <div class="card">
-    <h2>Cadencia media</h2>
-    <p class="note">Pasos por minuto — objetivo &gt;170 spm reduce el impacto articular.</p>
-    <canvas id="cadence"></canvas>
-  </div>
-
-  <div class="card" id="weightCard">
-    <h2>Peso corporal</h2>
-    <p class="note">Evolución del peso registrado en Garmin Connect.</p>
-    <canvas id="weight"></canvas>
-  </div>
-
-</div>
-
-<!-- ══════════════════════════════════════════════════════
-     CORRELATION EXPLORER
-══════════════════════════════════════════════════════ -->
-<div class="card">
-  <h2>Explorador de correlaciones</h2>
-  <p class="note">Cruza cualquier par de variables para ver si guardan relación.</p>
-
-  <div class="scatter-controls">
-    <label for="scatterX">Eje X</label>
-    <select id="scatterX"></select>
-
-    <label for="scatterY">Eje Y</label>
-    <select id="scatterY"></select>
-
-    <button class="preset" data-preset="heat">Calor→FC</button>
-    <button class="preset" data-preset="sleep">Sueño→Rendimiento</button>
-    <button class="preset" data-preset="bedtime">Acostarse→Sueño</button>
-
-    <span id="scatterR2"></span>
-  </div>
-
-  <canvas id="scatter"></canvas>
-</div>
-
-<!-- ══════════════════════════════════════════════════════
-     HEATMAP DE ACTIVIDAD
-══════════════════════════════════════════════════════ -->
-<div class="card">
-  <h2>Calendario de actividad</h2>
-  <p class="note">Vista tipo GitHub — verde intenso = carrera larga, azul = otra actividad.</p>
-  <div id="heatmap"></div>
-  <div class="hm-legend">
-    <div class="hm-legend-item"><span class="hm-cell hm-run1"></span> Carrera corta</div>
-    <div class="hm-legend-item"><span class="hm-cell hm-run2"></span> Carrera media</div>
-    <div class="hm-legend-item"><span class="hm-cell hm-run3"></span> Carrera larga</div>
-    <div class="hm-legend-item"><span class="hm-cell hm-other"></span> Otra actividad</div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════════════
-     RUNS TABLE
-══════════════════════════════════════════════════════ -->
-<div class="card">
-  <h2>Historial de carreras</h2>
-  <p class="note">Haz clic en una fila para ver el desglose completo de esa salida.</p>
-  <div class="table-wrap">
-    <table id="runsTable">
-      <thead>
-        <tr>
-          <th>Fecha</th>
-          <th>Km</th>
-          <th>Tiempo</th>
-          <th>Ritmo</th>
-          <th>FC</th>
-          <th>FC máx</th>
-          <th>Cadencia</th>
-          <th>EF</th>
-          <th>Temp</th>
-        </tr>
-      </thead>
-      <tbody>
-        <!-- JS fills rows -->
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════════════
-     MODAL
-══════════════════════════════════════════════════════ -->
-<div id="modal" class="hidden">
-  <div class="modal-panel">
-    <button id="modalClose">×</button>
-    <div id="modalBody">
-      <!-- JS fills content -->
+  <!-- Barra sticky: anclas de actos + rango global + chip de frescura -->
+  <nav id="stickyBar" class="sticky-bar" aria-label="Navegación del cuaderno">
+    <div class="sticky-inner">
+      <ul class="acts-nav">
+        <li><a class="nav-link" href="#acto-hoy">Hoy</a></li>
+        <li><a class="nav-link" href="#acto-semana">Semana</a></li>
+        <li><a class="nav-link" href="#acto-progreso">Progreso</a></li>
+        <li><a class="nav-link" href="#acto-intensidad">Intensidad</a></li>
+        <li><a class="nav-link" href="#acto-recuperacion">Recuperación</a></li>
+        <li><a class="nav-link" href="#acto-archivo">Archivo</a></li>
+      </ul>
+      <div id="rangeSelector" class="range-selector" role="group" aria-label="Rango temporal">
+        <button type="button" class="range-btn" data-range="7"  aria-pressed="false">7d</button>
+        <button type="button" class="range-btn" data-range="30" aria-pressed="false">30d</button>
+        <button type="button" class="range-btn" data-range="90" aria-pressed="true">90d</button>
+        <button type="button" class="range-btn" data-range="all" aria-pressed="false">Todo</button>
+      </div>
+      <span id="freshChip" class="chip" aria-live="polite"></span>
     </div>
-  </div>
-</div>
+  </nav>
 
-<!-- ══════════════════════════════════════════════════════
-     FOOTER
-══════════════════════════════════════════════════════ -->
-<footer>
-  Datos: Garmin Connect · actualizado a diario · <span id="footRange"></span>
-</footer>
+  <main>
 
-<!-- ══════════════════════════════════════════════════════
-     SCRIPTS
-══════════════════════════════════════════════════════ -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script type="module" src="app.js"></script>
+    <!-- ============ ACTO 1 · HOY ============ -->
+    <section id="acto-hoy" class="acto" aria-labelledby="h-hoy">
+      <h2 id="h-hoy"><span class="acto-num">Acto 1</span> Hoy</h2>
+      <p id="insightHoy" class="insight"></p>
 
+      <!-- 1.1 Semáforo hero: estado GRIS NEUTRO mientras carga (nunca ámbar hardcodeado).
+           today.js cambia la clase estado-* y rellena icono, mensaje, razones y bullet bars. -->
+      <article id="cardSemaforo" class="card hero-card estado-neutro">
+        <h3 class="sr-only">Estado de hoy</h3>
+        <!-- Regla §4 «sin excepciones»: card exenta del rango → badge. Aquí el texto
+             es «hoy» (no «histórico completo») porque la card muestra el estado de HOY. -->
+        <span class="badge-historico badge-hero">⟳ hoy · ignora el rango</span>
+        <div class="hero-main">
+          <div id="semaforoIcono" class="hero-icon" aria-hidden="true">·</div>
+          <div class="hero-texto">
+            <span id="semaforoSr" class="sr-only">Semáforo: cargando</span>
+            <p id="semaforoMensaje" class="hero-mensaje">Cargando datos…</p>
+            <ul id="semaforoRazones" class="hero-razones"></ul>
+          </div>
+        </div>
+        <aside class="hero-bullets" aria-label="Indicadores de hoy">
+          <div id="bulletHrv" class="bullet"></div>
+          <div id="bulletBB" class="bullet"></div>
+          <div id="bulletAcwr" class="bullet"></div>
+          <p id="acwrNota" class="note"></p>
+        </aside>
+      </article>
+    </section>
+
+    <!-- ============ ACTO 2 · ESTA SEMANA ============ -->
+    <section id="acto-semana" class="acto" aria-labelledby="h-semana">
+      <h2 id="h-semana"><span class="acto-num">Acto 2</span> Esta semana</h2>
+      <p id="insightSemana" class="insight"></p>
+
+      <!-- 2.1 Stat-tiles con sparklines (today.js + sparkline.js) -->
+      <article id="cardTiles" class="card">
+        <h3>Esta semana en cifras <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div id="statTiles" class="tiles-grid"></div>
+        <p class="note">Sparklines: evolución reciente · deltas frente a la media de 4 semanas · solo «Tiempo total» respeta el rango elegido</p>
+      </article>
+
+      <!-- 2.2 Km por semana ISO + media móvil 4 sem -->
+      <article id="cardKmSemana" class="card">
+        <h3>Km por semana</h3>
+        <div class="chart-wrap">
+          <canvas id="chartKmSemana" role="img" aria-label="Barras de kilómetros por semana ISO con línea de media móvil de cuatro semanas"></canvas>
+        </div>
+        <p class="note">Barras: km por semana ISO · línea: media móvil de 4 semanas · la semana en curso va al 40 % y con etiqueta «en curso»</p>
+      </article>
+
+      <!-- 2.3 Récords personales + predicciones (charts.js:renderPRs) -->
+      <article id="cardPRs" class="card">
+        <h3>Récords personales y predicciones <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div id="prList" class="pr-list"></div>
+        <div id="predicciones" class="predicciones"></div>
+        <p class="note">Predicciones Riegel (exp. 1.06) sobre tu mejor esfuerzo real · la equivalencia del VO₂max 45 de Garmin marca el potencial</p>
+      </article>
+    </section>
+
+    <!-- ============ ACTO 3 · PROGRESO ============ -->
+    <section id="acto-progreso" class="acto" aria-labelledby="h-progreso">
+      <h2 id="h-progreso"><span class="acto-num">Acto 3</span> Progreso</h2>
+      <p id="insightProgreso" class="insight"></p>
+
+      <!-- 3.1 Eficiencia aeróbica -->
+      <article id="cardEF" class="card">
+        <h3>Eficiencia aeróbica (EF) <span id="efBadge" class="badge-metric"></span></h3>
+        <div class="chart-wrap">
+          <canvas id="chartEF" role="img" aria-label="Eficiencia aeróbica por carrera: todas las carreras, solo zona 2 con tendencia, y serie ajustada por temperatura"></canvas>
+        </div>
+        <p class="note">☀ = carrera con más de 24 °C: el calor de Madrid infla la FC, no es retroceso · «ajustado» es una estimación (~1,5 % por cada 5 °C sobre 15 °C)</p>
+      </article>
+
+      <!-- 3.2 Ritmo y FC media: small multiples, eje X común, crosshair sincronizado -->
+      <article id="cardRitmoFc" class="card">
+        <h3>Ritmo y FC media</h3>
+        <div class="chart-wrap chart-wrap--sm">
+          <canvas id="chartRitmo" role="img" aria-label="Ritmo por carrera, eje invertido: más rápido arriba"></canvas>
+        </div>
+        <div class="chart-wrap chart-wrap--sm">
+          <canvas id="chartFc" role="img" aria-label="Frecuencia cardiaca media por carrera con techo de zona 2 en 142 pulsaciones"></canvas>
+        </div>
+        <p class="note">Ritmo con eje invertido: más rápido arriba · línea discontinua: techo Z2 (142 ppm)</p>
+      </article>
+
+      <!-- 3.3 Desacople aeróbico -->
+      <article id="cardDesacople" class="card">
+        <h3>Desacople aeróbico</h3>
+        <div class="chart-wrap">
+          <canvas id="chartDesacople" role="img" aria-label="Desacople aeróbico por carrera en porcentaje, con umbrales del cinco y del diez por ciento"></canvas>
+        </div>
+        <p class="note">Drift de EF entre 1.ª y 2.ª mitad · solo carreras ≥3 km · umbrales 5 % y 10 % etiquetados · ☀ = más de 24 °C</p>
+      </article>
+
+      <!-- 3.4 Mes a mes: tabla compacta sin canvas -->
+      <article id="cardMensual" class="card">
+        <h3>Mes a mes <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div class="table-wrap">
+          <table id="tablaMensual">
+            <thead>
+              <tr><th>Mes</th><th class="num">Km</th><th class="num">Ritmo</th><th class="num">FC</th><th class="num">EF</th><th class="num">Cadencia</th></tr>
+            </thead>
+            <tbody id="tablaMensualBody"></tbody>
+          </table>
+        </div>
+        <p class="note">Flechas ▲▼ frente al mes anterior · el verde/rojo indica juicio (mejor/peor), nunca series de datos</p>
+      </article>
+    </section>
+
+    <!-- ============ ACTO 4 · INTENSIDAD Y TÉCNICA ============ -->
+    <section id="acto-intensidad" class="acto" aria-labelledby="h-intensidad">
+      <h2 id="h-intensidad"><span class="acto-num">Acto 4</span> Intensidad y técnica</h2>
+      <p id="insightIntensidad" class="insight"></p>
+
+      <!-- 4.1 Tiempo en zonas FC (rampa azul §2.4) -->
+      <article id="cardZonas" class="card">
+        <h3>Tiempo en zonas de FC <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div class="zonas-layout">
+          <div class="chart-wrap">
+            <canvas id="chartZonas" role="img" aria-label="Barras apiladas al cien por cien del tiempo en cada zona de frecuencia cardiaca por semana"></canvas>
+          </div>
+          <aside id="kpiZonas" class="kpi-side" aria-label="Porcentaje de tiempo en zonas 1 y 2"></aside>
+        </div>
+        <p class="note">Zonas Garmin: el techo 142 cae dentro de la Z3 Garmin (134–153) · el % exacto ≤142 requiere un export futuro, hoy no está disponible</p>
+      </article>
+
+      <!-- 4.2 Control de intensidad -->
+      <article id="cardIntensidad" class="card">
+        <h3>Control de intensidad</h3>
+        <p id="kpiIntensidad" class="kpi-line"></p>
+        <div class="chart-wrap">
+          <canvas id="chartIntensidad" role="img" aria-label="Frecuencia cardiaca media de cada carrera frente al techo de zona 2 en 142"></canvas>
+        </div>
+        <p class="note">Puntos con anillo claro: FC media por encima de 142 ppm</p>
+      </article>
+
+      <!-- 4.3 Cadencia -->
+      <article id="cardCadencia" class="card">
+        <h3>Cadencia</h3>
+        <p id="kpiCadencia" class="kpi-line"></p>
+        <div class="chart-wrap">
+          <canvas id="chartCadencia" role="img" aria-label="Cadencia por carrera con media móvil y banda objetivo de 160 a 165 pasos por minuto"></canvas>
+        </div>
+        <p class="note">Banda gris: objetivo 160–165 spm · outliers &lt;120 spm excluidos (se indica cuántos)</p>
+      </article>
+    </section>
+
+    <!-- ============ ACTO 5 · RECUPERACIÓN ============ -->
+    <section id="acto-recuperacion" class="acto" aria-labelledby="h-recuperacion">
+      <h2 id="h-recuperacion"><span class="acto-num">Acto 5</span> Recuperación</h2>
+      <p id="insightRecuperacion" class="insight"></p>
+
+      <!-- 5.1 Sueño: fases reales apiladas (rampa violeta §2.4) -->
+      <article id="cardSueno" class="card">
+        <h3>Sueño: fases y horas</h3>
+        <div class="chart-wrap">
+          <canvas id="chartSueno" role="img" aria-label="Barras apiladas de horas de sueño por noche divididas en fases: profundo, REM y ligero"></canvas>
+        </div>
+        <p class="note">Fases reales: profundo, REM y ligero (resto) · score y hora de acostarse en el tooltip</p>
+      </article>
+
+      <!-- 5.2 HRV nocturno -->
+      <article id="cardHrv" class="card">
+        <h3>HRV nocturno</h3>
+        <div class="chart-wrap">
+          <canvas id="chartHrv" role="img" aria-label="Variabilidad de la frecuencia cardiaca nocturna con banda de referencia entre 51 y 91"></canvas>
+        </div>
+        <p class="note">Banda gris: baseline 51–91 ms (referencia, no estado) · último valor con etiqueta directa</p>
+      </article>
+    </section>
+
+    <!-- ============ ACTO 6 · ARCHIVO ============ -->
+    <section id="acto-archivo" class="acto" aria-labelledby="h-archivo">
+      <h2 id="h-archivo"><span class="acto-num">Acto 6</span> Archivo</h2>
+      <p id="insightArchivo" class="insight"></p>
+
+      <!-- 6.1 Calendario de actividad: heatmap SVG propio (heatmap.js) -->
+      <article id="cardHeatmap" class="card">
+        <h3>Calendario de actividad <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div id="heatmapPager" class="pager" role="group" aria-label="Paginación por año"></div>
+        <div id="heatmapContainer" class="heatmap-container"></div>
+        <p id="kpiFuerza" class="kpi-line"></p>
+        <p class="note">Rombo violeta: otra actividad (fuerza o caminata) · click o Enter en una carrera abre su detalle</p>
+      </article>
+
+      <!-- 6.2a Correlaciones destacadas (scatter.js:renderCorrelaciones) -->
+      <article id="cardCorrelaciones" class="card">
+        <h3>Correlaciones destacadas <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div id="corrTiles" class="tiles-grid"></div>
+        <!-- El n lo rellena scatter.js dinámicamente (cero notas que mienten) -->
+        <p class="note"><span id="corrN">Muestra pequeña</span>: correlaciones orientativas · click en una tarjeta configura el explorador</p>
+      </article>
+
+      <!-- 6.2b Explorador de correlaciones (scatter.js:initExplorador) -->
+      <article id="cardExplorador" class="card">
+        <h3>Explorador de correlaciones <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div class="explorer-controls">
+          <label>Eje X
+            <select id="scatterX"></select>
+          </label>
+          <label>Eje Y
+            <select id="scatterY"></select>
+          </label>
+          <button id="presetBedtime" type="button" class="preset-btn" aria-pressed="false">Preset: hora de acostarse → EF</button>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chartScatter" role="img" aria-label="Diagrama de dispersión configurable entre dos métricas de las carreras"></canvas>
+        </div>
+        <p id="scatterInfo" class="kpi-line"></p>
+        <p class="note">R² con etiqueta cualitativa: débil &lt;0,3 · moderada · fuerte &gt;0,7 · con n&lt;20 la lectura es solo orientativa</p>
+      </article>
+
+      <!-- 6.3 Historial + modal (modal.js:renderHistorial) -->
+      <article id="cardHistorial" class="card">
+        <h3>Historial de carreras <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div class="table-wrap">
+          <table id="runsTable">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th class="num">Km</th>
+                <th class="num">Duración</th>
+                <th class="num">Ritmo</th>
+                <th class="num">FC</th>
+                <th class="num col-fcmax">FC máx</th>
+                <th class="num col-ef">EF</th>
+                <th class="num col-temp">Temp</th>
+                <th class="col-badges"><span class="sr-only">Logros</span></th>
+              </tr>
+            </thead>
+            <tbody id="runsTableBody"></tbody>
+          </table>
+        </div>
+        <button id="verTodasBtn" type="button" class="ver-todas" aria-expanded="false">Ver todas</button>
+        <p class="note">🏆 = récord personal · «split −» = segunda mitad más rápida · click o Enter en una fila abre el detalle</p>
+      </article>
+    </section>
+
+  </main>
+
+  <!-- Modal de detalle de carrera (modal.js) -->
+  <dialog id="runModal" aria-modal="true" aria-labelledby="modalTitle">
+    <button id="modalClose" class="modal-close" type="button" aria-label="Cerrar detalle">✕</button>
+    <h3 id="modalTitle"></h3>
+    <div id="modalBody"></div>
+  </dialog>
+
+  <footer class="site-footer">
+    <p id="footerUpdated"></p>
+  </footer>
+
+  <!-- Chart.js 4.4.9 vendorizado (UMD, expone window.Chart). SIEMPRE antes de los módulos. -->
+  <script src="vendor/chart.umd.min.js"></script>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>
