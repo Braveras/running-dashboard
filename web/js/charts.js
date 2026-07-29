@@ -988,17 +988,51 @@ export function renderZonas(ctx) {
   registerChart('chartZonas', chart);
 
   // KPI lateral: % del tiempo total en Z1-Z2 (zonas Garmin — etiquetado honesto).
+  // Fase 3: si ≥60 % de las carreras del histórico traen pct_z2 numérico
+  // (tiempo REAL con FC ≤ techo, calculado en fetch_data.py), el KPI principal
+  // pasa a ser ese % real (media ponderada por duración) y el dato de zonas
+  // Garmin queda como lectura secundaria. Sin pct_z2 → KPI actual intacto.
   const kpi = $id('kpiZonas');
   if (kpi) {
     const total = totales.reduce((a, b) => a + b, 0);
     const z12 = secs.reduce((a, fila) => a + fila[0] + fila[1], 0);
-    if (total > 0) {
-      const pct = Math.round((z12 / total) * 100);
-      kpi.innerHTML = `<strong>~${pct} %</strong> del tiempo en Z1-Z2<br>referencia 80/20 · zonas Garmin`;
+    const pctGarmin = total > 0 ? Math.round((z12 / total) * 100) : null;
+    const pctReal = pctZ2Ponderado(runs, detail);
+    if (pctReal !== null) {
+      kpi.innerHTML = `<strong>% tiempo ≤${TECHO_Z2} real: ${pctReal} %</strong> · referencia 80/20`
+        + (pctGarmin !== null ? `<br>zonas Garmin: ~${pctGarmin} % Z1-Z2` : '');
+    } else if (pctGarmin !== null) {
+      kpi.innerHTML = `<strong>~${pctGarmin} %</strong> del tiempo en Z1-Z2<br>referencia 80/20 · zonas Garmin`;
     } else {
       kpi.textContent = '';
     }
   }
+}
+
+/**
+ * % real de tiempo con FC ≤ techo Z2 sobre el histórico (fase 3): media de
+ * runs_detail[id].pct_z2 PONDERADA por la duración (dur_s) de cada carrera.
+ * Solo se usa si ≥60 % de las carreras traen pct_z2 numérico — clave ausente
+ * o null (despliegues viejos / carreras sin serie de FC) no cuenta ni lanza.
+ * @returns {number|null} porcentaje redondeado, o null si no hay base fiable.
+ */
+function pctZ2Ponderado(runs, detail) {
+  if (!Array.isArray(runs) || !runs.length || !detail) return null;
+  let conPct = 0;
+  let sumaPct = 0;
+  let sumaDur = 0;
+  for (const r of runs) {
+    const d = detail[String(r.id)];
+    const pct = d ? d.pct_z2 : null; // clave ausente → undefined → no finito
+    if (!Number.isFinite(pct)) continue;
+    conPct++;
+    if (Number.isFinite(r.dur_s) && r.dur_s > 0) {
+      sumaPct += pct * r.dur_s;
+      sumaDur += r.dur_s;
+    }
+  }
+  if (conPct / runs.length < 0.6 || !(sumaDur > 0)) return null;
+  return Math.round(sumaPct / sumaDur);
 }
 
 /* ==========================================================================

@@ -3,42 +3,85 @@
    Sin dependencias de DOM salvo emptyState/clearEmptyState (reciben el nodo).
    ========================================================================== */
 
-/* ---------- Constantes de paleta (hex validados 2026-07-23) ---------- */
+/* ---------- Constantes de paleta (§2 del spec) ----------
+   Dos paletas DISEÑADAS (la clara no es inversión de la oscura):
+   - dark: hex validados 2026-07-23 (--mode dark --surface #161b24).
+   - light: hex validados 2026-07-29 (--mode light --surface #ffffff y #f6f8fb).
+   Contrato del spec §2.4: si se cambia un hex, re-ejecutar validate_palette.js. */
 
-/** Tokens de superficie y texto (§2.1). */
-export const TOKENS = {
-  bg: '#0e1116',
-  card: '#161b24',
-  card2: '#1c2330',
-  border: '#232b3a',
-  grid: 'rgba(35, 43, 58, 0.5)', // --grid al 50%: grid recesivo solo horizontal
-  txt: '#e8edf4',
-  muted: '#94a0b3',
+const PALETAS = {
+  dark: {
+    tokens: {
+      bg: '#0e1116',
+      card: '#161b24',
+      card2: '#1c2330',
+      border: '#232b3a',
+      grid: 'rgba(35, 43, 58, 0.5)', // --grid al 50%: grid recesivo solo horizontal
+      txt: '#e8edf4',
+      muted: '#94a0b3',
+    },
+    series: { s1: '#3987e5', s2: '#199e70', s3: '#9085e9', s4: '#d55181' },
+    estado: { verde: '#4dd0a6', ambar: '#f6a35b', rojo: '#ef6b6b' },
+    rampaZonas: ['#b7d3f6', '#86b6ef', '#5598e7', '#2f7bd9', '#1e60b0'],
+    rampaHeatmap: ['#1e60b0', '#2f7bd9', '#5598e7', '#9ec4f2'],
+    rampaSueno: ['#b9b0f4', '#9085e9', '#6b5fd0'],
+  },
+  light: {
+    tokens: {
+      bg: '#f6f8fb',
+      card: '#ffffff',
+      card2: '#eef2f7',
+      border: '#d9e0ea',
+      grid: 'rgba(28, 37, 48, 0.12)', // grid recesivo también en claro
+      txt: '#1c2530',
+      muted: '#5c6a7d',
+    },
+    series: { s1: '#2166c5', s2: '#0d7a56', s3: '#6a5bd8', s4: '#c22e67' },
+    estado: { verde: '#0b7a4e', ambar: '#9a5b00', rojo: '#c1303c' },
+    rampaZonas: ['#82b0ec', '#5f96e0', '#3d7acc', '#265ea8', '#164280'],
+    // En claro «mucho km» = oscuro (misma semántica de índices: [0]=poco → [3]=mucho).
+    rampaHeatmap: ['#8fb8ee', '#6194dd', '#3a70bd', '#1f4e8f'],
+    rampaSueno: ['#a99df0', '#7d6cd8', '#5443a8'],
+  },
 };
+
+/* Los exports conservan NOMBRE y REFERENCIA (los módulos leen propiedades en
+   tiempo de render, nunca capturan el hex en import): setPaletteTheme() muta
+   el contenido en sitio y un re-render recoge la paleta nueva sin tocar nada. */
+
+/** Tokens de superficie y texto (§2.1). Contenido mutable por setPaletteTheme. */
+export const TOKENS = { ...PALETAS.dark.tokens };
 
 /** Series categóricas (§2.2) — orden FIJO, nunca cicladas. */
-export const SERIES = {
-  s1: '#3987e5', // azul: volumen, ritmo, desacople, scatter, sparklines
-  s2: '#199e70', // verde-aqua: EF Z2 (protagonista), HRV, medias móviles de S1
-  s3: '#9085e9', // violeta: FC, sueño, «otra actividad» en heatmap
-  s4: '#d55181', // magenta: cadencia
-};
+export const SERIES = { ...PALETAS.dark.series };
 
 /** Estado (§2.3) — RESERVADO: solo semáforo/umbrales/badges/flechas, con icono+texto. */
-export const ESTADO = {
-  verde: '#4dd0a6',
-  ambar: '#f6a35b',
-  rojo: '#ef6b6b',
-};
+export const ESTADO = { ...PALETAS.dark.estado };
 
 /** Rampa zonas FC, 5 pasos Z1 claro → Z5 oscuro (§2.4). Solo para la gráfica de zonas. */
-export const RAMPA_ZONAS = ['#b7d3f6', '#86b6ef', '#5598e7', '#2f7bd9', '#1e60b0'];
+export const RAMPA_ZONAS = [...PALETAS.dark.rampaZonas];
 
-/** Rampa heatmap, 4 pasos poco km (oscuro) → mucho km (claro) (§2.4). Celda vacía: TOKENS.card2. */
-export const RAMPA_HEATMAP = ['#1e60b0', '#2f7bd9', '#5598e7', '#9ec4f2'];
+/** Rampa heatmap, 4 pasos poco km ([0]) → mucho km ([3]) (§2.4). Celda vacía: TOKENS.card2. */
+export const RAMPA_HEATMAP = [...PALETAS.dark.rampaHeatmap];
 
 /** Rampa fases de sueño (§2.4): [ligero, REM, profundo]. */
-export const RAMPA_SUENO = ['#b9b0f4', '#9085e9', '#6b5fd0'];
+export const RAMPA_SUENO = [...PALETAS.dark.rampaSueno];
+
+/**
+ * Activa la paleta del tema en TODAS las constantes exportadas (mutación en
+ * sitio: mismas referencias). Tras llamarla hay que re-aplicar los defaults
+ * de Chart.js y re-renderizar — lo orquesta app.js en el evento 'themechange'.
+ * @param {'dark'|'light'} theme
+ */
+export function setPaletteTheme(theme) {
+  const p = PALETAS[theme] || PALETAS.dark;
+  Object.assign(TOKENS, p.tokens);
+  Object.assign(SERIES, p.series);
+  Object.assign(ESTADO, p.estado);
+  RAMPA_ZONAS.splice(0, RAMPA_ZONAS.length, ...p.rampaZonas);
+  RAMPA_HEATMAP.splice(0, RAMPA_HEATMAP.length, ...p.rampaHeatmap);
+  RAMPA_SUENO.splice(0, RAMPA_SUENO.length, ...p.rampaSueno);
+}
 
 /** Meses abreviados en español, índice 0 = enero. */
 export const MONTH_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
