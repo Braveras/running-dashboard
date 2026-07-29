@@ -5,6 +5,8 @@ name: Test fase 3 (probe)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [fase-3]
 
 permissions:
   contents: read
