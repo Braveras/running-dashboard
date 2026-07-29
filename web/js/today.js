@@ -191,10 +191,10 @@ function pintaBullet(cont, nombre, valorTxt, svgOpts) {
  *      salir» — añade motivo, pero NO anula penalizaciones (2)-(4).
  *      Se usa el ratio Garmin acute_load/chronic_load (hoy 35/137 ≈ 0.26);
  *      si falta, el ACWR propio por km.
- *  (6) BODY BATTERY: daily.json NO trae nivel absoluto (solo bb_charged /
- *      bb_drained — verificado). Regla v1: balance charged−drained del DÍA
- *      PREVIO ≤ −20 → ámbar, etiquetado «balance Body Battery». El nivel
- *      absoluto exigiría exportarlo en fetch_data.py (fase 3): no se inventa.
+ *  (6) BODY BATTERY balance: charged−drained del DÍA PREVIO ≤ −20 → ámbar.
+ *  (6b) BODY BATTERY nivel (fase 3): bb_high del día más reciente = pico tras
+ *      la carga nocturna ≈ reserva al despertar; < 40 → ámbar. Sin bb_high
+ *      (despliegue sin regenerar datos) la regla es inerte.
  *
  * Estado gris .estado-neutro solo mientras carga (lo pone el HTML);
  * esta función siempre lo sustituye por verde/ámbar/rojo.
@@ -228,7 +228,11 @@ export function renderSemaforo(ctx) {
   const bUp = banda && Number.isFinite(banda.balancedUpper) ? banda.balancedUpper : null;
 
   // Balance Body Battery del día previo (fila con date = ayer; si no, la penúltima).
+  // Fase 3: si esa misma fila trae el nivel ABSOLUTO (bb_last, o bb_high si no
+  // hay last), lo usamos como lectura principal. Claves ausentes o null
+  // (despliegues sin regenerar) → bbNivel queda null y todo sigue como antes.
   let bbBalance = null;
+  let bbNivel = null;
   if (Array.isArray(daily) && daily.length) {
     const ayer = isoAddDays(ultimo && ultimo.date === hoy ? hoy : (ultimo ? ultimo.date : hoy), -1);
     const fila = daily.find((d) => d.date === ayer) ||
@@ -237,6 +241,10 @@ export function renderSemaforo(ctx) {
       bbBalance = fila.bb_charged - fila.bb_drained;
     }
   }
+  // Nivel ABSOLUTO (fase 3): bb_high de la fila MÁS RECIENTE = pico tras la
+  // carga nocturna ≈ reserva al despertar. Nunca bb_last (a fin de día es el
+  // nivel de irse a dormir: bajo siempre, dispararía ámbar a diario).
+  if (ultimo && Number.isFinite(ultimo.bb_high)) bbNivel = ultimo.bb_high;
 
   // ACWR: propio (km/día) para el bullet + ratio Garmin como doble lectura.
   const acwrKm = acwrPropio(runs, ref);
@@ -309,6 +317,13 @@ export function renderSemaforo(ctx) {
     razones.push(`Balance Body Battery de ayer muy negativo (${fmtNum(bbBalance, 0)}): llegas con déficit.`);
   }
 
+  // (6b) Fase 3 — nivel absoluto de Body Battery: <40 al despertar → ámbar.
+  // Solo aplica si el pipeline ya exporta bb_last/bb_high; sin nivel, nada cambia.
+  if (bbNivel !== null && bbNivel < 40) {
+    nivel = Math.max(nivel, 1);
+    razones.push(`Body Battery bajo (pico de hoy ${bbNivel}): la noche no ha recargado.`);
+  }
+
   // --- Pintado del estado ---
   const estados = [
     { clase: 'estado-verde', icono: '✓', nombre: 'verde', msg: 'Sal a correr — Z2 suave' },
@@ -342,14 +357,25 @@ export function renderSemaforo(ctx) {
 
   const bBB = document.getElementById('bulletBB');
   if (bBB) {
-    pintaBullet(bBB, 'Balance Body Battery (ayer)',
-      Number.isFinite(bbBalance) ? (bbBalance > 0 ? `+${bbBalance}` : String(bbBalance)) : '–', {
-        min: Math.min(-60, Number.isFinite(bbBalance) ? bbBalance - 5 : -60),
-        max: Math.max(60, Number.isFinite(bbBalance) ? bbBalance + 5 : 60),
-        value: Number.isFinite(bbBalance) ? bbBalance : null,
-        band: { from: 0, to: Math.max(60, Number.isFinite(bbBalance) ? bbBalance + 5 : 60) },
-        ticks: [{ v: -20, label: '−20' }, { v: 0, label: '0' }],
+    if (bbNivel !== null) {
+      // Fase 3: nivel absoluto 0–100 con banda de referencia 40–70.
+      pintaBullet(bBB, 'Body Battery (pico de hoy)', String(bbNivel), {
+        min: 0,
+        max: 100,
+        value: bbNivel,
+        band: { from: 40, to: 70 },
+        ticks: [{ v: 40, label: '40' }, { v: 70, label: '70' }],
       });
+    } else {
+      pintaBullet(bBB, 'Balance Body Battery (ayer)',
+        Number.isFinite(bbBalance) ? (bbBalance > 0 ? `+${bbBalance}` : String(bbBalance)) : '–', {
+          min: Math.min(-60, Number.isFinite(bbBalance) ? bbBalance - 5 : -60),
+          max: Math.max(60, Number.isFinite(bbBalance) ? bbBalance + 5 : 60),
+          value: Number.isFinite(bbBalance) ? bbBalance : null,
+          band: { from: 0, to: Math.max(60, Number.isFinite(bbBalance) ? bbBalance + 5 : 60) },
+          ticks: [{ v: -20, label: '−20' }, { v: 0, label: '0' }],
+        });
+    }
   }
 
   const bAcwr = document.getElementById('bulletAcwr');
@@ -378,7 +404,35 @@ export function renderSemaforo(ctx) {
     } else {
       nota.textContent = 'ACWR no computable todavía: hacen falta al menos dos semanas de carreras.';
     }
+    pintaTendenciaRatio(nota, ctx.data ? ctx.data.statusHistory : null);
   }
+}
+
+/**
+ * Fase 3 — tendencia del ratio Garmin desde status_history.json (1 punto/día).
+ * Con ≥14 puntos con acute_load y chronic_load numéricos (chronic > 0) añade
+ * bajo #acwrNota una línea «ratio Garmin: X → Y (N días)» (primer vs último
+ * punto válido). Con menos puntos, fichero ausente o null → no pinta nada
+ * (y retira la línea de un render anterior: re-render idempotente).
+ */
+function pintaTendenciaRatio(nota, statusHistory) {
+  let linea = document.getElementById('acwrTendencia');
+  const validos = Array.isArray(statusHistory)
+    ? statusHistory.filter((p) => p && Number.isFinite(p.acute_load) &&
+        Number.isFinite(p.chronic_load) && p.chronic_load > 0)
+    : [];
+  if (validos.length < 14) {
+    if (linea) linea.remove();
+    return;
+  }
+  const primero = validos[0].acute_load / validos[0].chronic_load;
+  const ultimo = validos[validos.length - 1].acute_load / validos[validos.length - 1].chronic_load;
+  if (!linea) {
+    linea = el('p', 'note');
+    linea.id = 'acwrTendencia';
+    nota.insertAdjacentElement('afterend', linea);
+  }
+  linea.textContent = `ratio Garmin: ${fmtNum(primero, 2)} → ${fmtNum(ultimo, 2)} (${validos.length} días)`;
 }
 
 /* ==========================================================================

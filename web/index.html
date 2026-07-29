@@ -4,6 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0e1116">
+  <!-- Anti-flash: aplica el tema guardado ANTES de cargar el CSS. app.js
+       mantiene después el atributo, el chip theme-color y la paleta JS. -->
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem('zonados-theme') === 'light') {
+          document.documentElement.setAttribute('data-theme', 'light');
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.setAttribute('content', '#f6f8fb');
+        }
+      } catch (e) { /* sin localStorage: tema oscuro por defecto */ }
+    })();
+  </script>
   <title>Zona Dos · Cuaderno de entrenamiento</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -40,6 +53,8 @@
         <button type="button" class="range-btn" data-range="all" aria-pressed="false">Todo</button>
       </div>
       <span id="freshChip" class="chip" aria-live="polite"></span>
+      <button id="themeToggle" class="theme-toggle" type="button"
+              aria-label="Cambiar a tema claro" aria-pressed="false">🌙</button>
     </div>
   </nav>
 

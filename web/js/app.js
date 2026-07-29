@@ -6,6 +6,7 @@
 import {
   loadData, setData, getData, setRange, getRange, buildCtx, applyChartDefaults,
 } from './state.js';
+import { TOKENS, setPaletteTheme } from './helpers.js';
 import { renderSemaforo, renderStatTiles } from './today.js';
 import {
   renderKmSemana, renderPRs, renderEF, renderRitmoFc, renderDesacople,
@@ -146,6 +147,57 @@ function wireRangeSelector() {
   });
 }
 
+/* ---------- Tema claro/oscuro ---------- */
+
+const THEME_KEY = 'zonados-theme';
+
+/** Tema activo según el atributo del <html> (lo fija el script inline del head). */
+function currentTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+}
+
+/**
+ * Aplica un tema SIN re-renderizar: atributo data-theme, paleta JS, defaults
+ * de Chart.js, chip meta theme-color y estado del botón toggle.
+ * El re-render lo dispara el evento 'themechange' (ver wireThemeToggle).
+ */
+function applyTheme(theme) {
+  if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
+  setPaletteTheme(theme);
+  applyChartDefaults();                          // relee TOKENS mutados (no-op si Chart aún no cargó)
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', TOKENS.bg);
+  const btn = $('themeToggle');
+  if (btn) {
+    const claro = theme === 'light';
+    btn.textContent = claro ? '☀' : '🌙';
+    btn.setAttribute('aria-pressed', String(claro));
+    btn.setAttribute('aria-label', claro ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro');
+  }
+}
+
+/** Re-render completo: la misma ruta que init (exentas + explorador + dependientes). */
+function rerenderTodo() {
+  if (!getData()) return; // cambio de tema antes de que resuelva loadData(): init pintará ya con la paleta nueva
+  const ctx = buildCtx();
+  for (const fn of EXENTAS_DE_RANGO) safe(fn, ctx);
+  safe(initExplorador, ctx); // re-init seguro: selects reconstruidos, listeners por propiedad
+  rerenderDependientes();
+}
+
+function wireThemeToggle() {
+  const btn = $('themeToggle');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const next = currentTheme() === 'light' ? 'dark' : 'light';
+    try { localStorage.setItem(THEME_KEY, next); } catch (_e) { /* modo privado: no persiste */ }
+    applyTheme(next);
+    document.dispatchEvent(new CustomEvent('themechange', { detail: { theme: next } }));
+  });
+  document.addEventListener('themechange', rerenderTodo);
+}
+
 /* ---------- Scroll-spy ---------- */
 
 function wireScrollSpy() {
@@ -202,6 +254,8 @@ async function init() {
 /* ---------- Arranque ---------- */
 
 document.addEventListener('DOMContentLoaded', () => {
+  applyTheme(currentTheme()); // sincroniza paleta JS + botón con el data-theme del head
+  wireThemeToggle();
   wireRangeSelector();
   wireScrollSpy();
   $('retryBtn').addEventListener('click', () => init());

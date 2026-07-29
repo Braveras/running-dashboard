@@ -17,6 +17,8 @@ DATA = os.path.join(ROOT, "data")
 FIRST_DATE = "2026-03-01"
 HISTORY_REFETCH_DAYS = 7  # dailies: re-fetch últimos N días por si sincronizó tarde
 MADRID = ZoneInfo("Europe/Madrid")
+Z2_MAX_HR = 142  # techo Z2 personal: % de tiempo real por debajo (fase 3)
+BB_BACKFILL_MAX = 200  # límite de get_stats() por run al rellenar histórico BB
 
 
 def today_madrid():
@@ -136,14 +138,58 @@ def fetch_activities(g):
     return all_acts, runs
 
 
+def pct_time_below_z2(g, activity_id):
+    """% de tiempo real con FC <= Z2_MAX_HR, de las muestras de FC del detalle.
+    Pondera por el intervalo entre muestras consecutivas (directTimestamp, ms).
+    Devuelve (pct, n_muestras) o (None, 0) si no hay serie de FC."""
+    d = safe(g.get_activity_details, activity_id, 2000, 0) or {}
+    descr = {m.get("key"): m.get("metricsIndex") for m in d.get("metricDescriptors") or []}
+    i_hr, i_ts = descr.get("directHeartRate"), descr.get("directTimestamp")
+    if i_hr is None:
+        return None, 0
+    rows = []
+    for m in d.get("activityDetailMetrics") or []:
+        v = m.get("metrics") or []
+        hr = v[i_hr] if i_hr < len(v) else None
+        ts = v[i_ts] if i_ts is not None and i_ts < len(v) else None
+        if hr is not None:
+            rows.append((ts, hr))
+    if len(rows) < 10:
+        return None, len(rows)
+    if all(ts is not None for ts, _ in rows):
+        rows.sort(key=lambda x: x[0])
+        total = below = 0.0
+        for (t0, hr0), (t1, _) in zip(rows, rows[1:]):
+            dt = t1 - t0
+            if dt <= 0:
+                continue
+            total += dt
+            if hr0 <= Z2_MAX_HR:
+                below += dt
+        if total > 0:
+            return round(below / total * 100, 1), len(rows)
+    # sin timestamps fiables: fracción de muestras (equiespaciadas por maxChartSize)
+    n_below = sum(1 for _, hr in rows if hr <= Z2_MAX_HR)
+    return round(n_below / len(rows) * 100, 1), len(rows)
+
+
 def fetch_run_details(g, runs):
     details = load_json("runs_detail.json", {})
+    # Backfill fase 3: carreras ya detalladas pero sin pct_z2 (clave ausente = pendiente;
+    # None con clave presente = ya intentado y sin serie de FC, no se reintenta).
+    for r in runs:
+        rid = str(r["id"])
+        if rid in details and "pct_z2" not in details[rid]:
+            pct, n = pct_time_below_z2(g, r["id"])
+            details[rid]["pct_z2"] = pct
+            print(f"  pct_z2 backfill {rid} ({r['date']}): {pct}% (n={n})")
     for r in runs:
         rid = str(r["id"])
         if rid in details:
             continue
         print(f"  detalle nueva carrera {rid} ({r['date']})")
         d = {"splits": [], "zones": [], "weather": None}
+        d["pct_z2"], _ = pct_time_below_z2(g, r["id"])
         splits = safe(g.get_activity_splits, r["id"]) or {}
         for lap in splits.get("lapDTOs", []):
             d["splits"].append({
@@ -200,11 +246,20 @@ def fetch_dailies(g):
                 weights[ws.get("summaryDate")] = round(lw["weight"] / 1000, 1)
         chunk_start = chunk_end + timedelta(days=1)
 
+    def add_bb_level(entry, ds):
+        """Fase 3: nivel ABSOLUTO de Body Battery desde el resumen diario.
+        Claves presentes con None = día sin datos ya consultado (no reintentar)."""
+        s = safe(g.get_stats, ds, default={}) or {}
+        entry["bb_high"] = s.get("bodyBatteryHighestValue")
+        entry["bb_low"] = s.get("bodyBatteryLowestValue")
+        entry["bb_last"] = s.get("bodyBatteryMostRecentValue")
+
     d = start
     hrv_baseline = None
     while d <= today:
         ds = iso(d)
         entry = dailies.get(ds, {"date": ds})
+        add_bb_level(entry, ds)
 
         sleep = safe(g.get_sleep_data, ds, default={}) or {}
         dto = sleep.get("dailySleepDTO") or {}
@@ -238,6 +293,13 @@ def fetch_dailies(g):
         dailies[ds] = entry
         d += timedelta(days=1)
 
+    # Backfill fase 3 (one-shot repartido): días históricos sin nivel de BB.
+    pendientes = [e for e in dailies.values() if "bb_high" not in e]
+    if pendientes:
+        print(f"  BB backfill: {min(len(pendientes), BB_BACKFILL_MAX)}/{len(pendientes)} días")
+        for e in pendientes[:BB_BACKFILL_MAX]:
+            add_bb_level(e, e["date"])
+
     return sorted(dailies.values(), key=lambda x: x["date"]), hrv_baseline
 
 
@@ -261,6 +323,23 @@ def fetch_status(g, hrv_baseline):
     except Exception:
         pass
     return out
+
+
+def append_status_history(status):
+    """Fase 3: acumula un punto diario de cargas Garmin -> status_history.json.
+    Garmin no expone histórico de acute/chronic: se construye día a día desde hoy.
+    La web pinta la serie ACWR de Garmin cuando haya suficientes puntos."""
+    hist = load_json("status_history.json", [])
+    if any(h.get("date") == status["date"] for h in hist):
+        return hist
+    hist.append({
+        "date": status["date"],
+        "acute_load": status.get("acute_load"),
+        "chronic_load": status.get("chronic_load"),
+        "vo2max": status.get("vo2max"),
+    })
+    hist.sort(key=lambda h: h["date"])
+    return hist
 
 
 def merge_runs_with_dailies(runs, dailies):
@@ -297,6 +376,7 @@ def main():
     save_json("runs_detail.json", details)
     save_json("daily.json", dailies)
     save_json("status.json", status)
+    save_json("status_history.json", append_status_history(status))
     save_json("meta.json", {"updated": datetime.now().isoformat(timespec="seconds"),
                             "first_date": FIRST_DATE})
     dump_token(g)

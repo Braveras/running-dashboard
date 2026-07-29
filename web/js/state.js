@@ -16,6 +16,12 @@ const FICHEROS = [
   ['meta', 'data/meta.json'],
 ];
 
+/* Opcionales (fase 3): su ausencia NO cuenta como error ni sale en el banner
+   — despliegues con datos aún sin regenerar simplemente no los pintan. */
+const FICHEROS_OPCIONALES = [
+  ['statusHistory', 'data/status_history.json'],
+];
+
 /**
  * Descarga los 6 JSON comprobando res.ok POR fichero (degradación parcial).
  * Los arrays (runs, daily, allActivities) se devuelven ORDENADOS ascendente
@@ -36,6 +42,14 @@ export async function loadData() {
     } catch (_e) {
       data[clave] = null;
       errores.push(ruta.split('/').pop());
+    }
+  }));
+  await Promise.all(FICHEROS_OPCIONALES.map(async ([clave, ruta]) => {
+    try {
+      const res = await fetch(ruta, { cache: 'no-store' });
+      data[clave] = res.ok ? await res.json() : null;
+    } catch (_e) {
+      data[clave] = null;
     }
   }));
   for (const clave of ['runs', 'daily', 'allActivities']) {
@@ -138,15 +152,17 @@ mqMovil.addEventListener('change', () => {
 /* ---------- Defaults globales de Chart.js ---------- */
 
 /**
- * Aplica los defaults de tema a Chart.js (llamar UNA vez tras comprobar que
- * window.Chart existe). Grid recesivo, tinta muted, fuente del sistema,
- * animación off si prefers-reduced-motion.
+ * Aplica los defaults de tema a Chart.js: grid recesivo, tinta muted, fuente
+ * del sistema, animación off si prefers-reduced-motion. Los colores se LEEN
+ * de TOKENS en el momento de la llamada (paleta activa, nunca hardcodeados):
+ * app.js la re-ejecuta tras setPaletteTheme() en cada cambio de tema, antes
+ * del re-render. Idempotente — llamar tras comprobar que window.Chart existe.
  * @returns {boolean} false si window.Chart no está disponible.
  */
 export function applyChartDefaults() {
   if (typeof Chart === 'undefined') return false;
-  Chart.defaults.color = TOKENS.muted;
-  Chart.defaults.borderColor = TOKENS.grid;          // grid al 50%, recesivo
+  Chart.defaults.color = TOKENS.muted;               // tinta de la paleta activa
+  Chart.defaults.borderColor = TOKENS.grid;          // grid recesivo (también en claro)
   Chart.defaults.font.family = FONT_UI;
   Chart.defaults.font.size = 11;
   Chart.defaults.maintainAspectRatio = false;        // altura la manda .chart-wrap

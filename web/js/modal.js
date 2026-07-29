@@ -252,10 +252,18 @@ function htmlSplits(splits) {
     </div>`;
 }
 
-/** Fila de desacople + comparación 1.ª/2.ª mitad con texto+icono. */
-function htmlDesacople(run, mitades) {
+/**
+ * Fila de desacople + comparación 1.ª/2.ª mitad con texto+icono.
+ * Fase 3: si el detalle trae pct_z2 numérico (% de tiempo real con FC ≤142),
+ * añade la fila «tiempo ≤142» junto al desacople. Clave ausente o null
+ * (despliegues viejos / sin serie de FC) → la fila no aparece.
+ */
+function htmlDesacople(run, mitades, pctZ2) {
+  const filaZ2 = Number.isFinite(pctZ2)
+    ? `<p class="kpi-line">tiempo ≤142: <strong>${fnum(pctZ2, 0)} %</strong> de la carrera con FC dentro de Z2</p>`
+    : '';
   if (!mitades) {
-    return '<p class="note">Sin splits: desacople no calculable para esta carrera.</p>';
+    return `${filaZ2}<p class="note">Sin splits: desacople no calculable para esta carrera.</p>`;
   }
   const { pace1, pace2, drift } = mitades;
   const comparacion = `1.ª mitad <strong>${paceFmt(pace1)}</strong> /km · 2.ª mitad <strong>${paceFmt(pace2)}</strong> /km`;
@@ -271,6 +279,7 @@ function htmlDesacople(run, mitades) {
   return `
     <h4>Desacople aeróbico</h4>
     <p class="kpi-line">${driftTxt}</p>
+    ${filaZ2}
     <p class="kpi-line">${comparacion} ${juicio}</p>`;
 }
 
@@ -327,7 +336,7 @@ export function openRunModal(runId) {
 
   /* --- Detalle: zonas + splits + desacople (o nota si no hay detalle) --- */
   const detalleHtml = detail
-    ? htmlZonas(detail.zones) + htmlSplits(detail.splits) + htmlDesacople(run, mitades)
+    ? htmlZonas(detail.zones) + htmlSplits(detail.splits) + htmlDesacople(run, mitades, detail.pct_z2)
     : '<p class="note">Sin detalle disponible para esta carrera (splits y zonas no exportados).</p>';
 
   body.innerHTML = metricas + clima + nocheHtml + detalleHtml;
