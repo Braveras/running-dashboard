@@ -112,6 +112,19 @@ function porMes(runs) {
 }
 
 /**
+ * Carreras con % REAL de tiempo con FC ≤142 (fase 3): cruza runs con
+ * runsDetail[id].pct_z2. Devuelve copias {…run, pct_z2} SOLO donde el campo
+ * es numérico (clave ausente / null → fuera, sin lanzar). Orden asc por fecha.
+ */
+function carrerasZ2pct(data) {
+  const det = data?.runsDetail;
+  if (!det || typeof det !== 'object') return [];
+  return carreras(data)
+    .map((r) => ({ ...r, pct_z2: det[String(r.id)]?.pct_z2 }))
+    .filter((r) => fin(r.pct_z2));
+}
+
+/**
  * Envuelve una lista de plantillas: devuelve la primera frase no nula;
  * si todas fallan (o lanzan), el fallback neutro. GARANTIZA no lanzar.
  */
@@ -221,6 +234,108 @@ function tplDisciplinaZ2(data) {
     ? ' — el calor de Madrid infla la FC, no es falta de control'
     : '';
   return `${dentro} de ${conHr.length} carreras con la FC media dentro de Z2 (${pct} %)${coda}.`;
+}
+
+/* ---------- Plantillas de DISCIPLINA Z2 (fase 3: runsDetail[id].pct_z2) ---------- */
+/* pct_z2 = % de tiempo REAL con FC ≤142 (no la FC media): mide cuánto de cada
+   carrera se corrió de verdad bajo el techo. Las tres plantillas siguientes
+   son ALTERNATIVAS por prioridad (solo una se pinta por acto), no duplicados. */
+
+/**
+ * «Disciplina al alza: 62 % del tiempo por debajo de 142 ppm en tus últimas
+ * 5 carreras, 14 puntos más que en las 5 anteriores.»
+ * Guardas: ≥10 carreras con pct_z2 (dos ventanas de 5 SIN solape) y cambio
+ * ≥10 puntos — por debajo es ruido entre salidas, no tendencia (§6.6).
+ * Habla de «tus últimas 5 carreras» (relativo al histórico registrado), así
+ * que sigue siendo cierta aunque los datos se congelen.
+ */
+function tplZ2Tendencia5(data) {
+  const rs = carrerasZ2pct(data);
+  if (rs.length < 10) return null;               // n mínimo: 5 + 5 sin solape
+  const ult = media(rs.slice(-5).map((r) => r.pct_z2));
+  const prev = media(rs.slice(-10, -5).map((r) => r.pct_z2));
+  if (!fin(ult) || !fin(prev)) return null;
+  const delta = ult - prev;
+  if (Math.abs(delta) < 10) return null;         // magnitud mínima: 10 puntos
+  if (delta > 0) {
+    return `Disciplina al alza: ${Math.round(ult)} % del tiempo por debajo de 142 ppm en tus últimas 5 carreras, ${Math.round(delta)} puntos más que en las 5 anteriores.`;
+  }
+  return `Tus últimas 5 carreras bajan al ${Math.round(ult)} % del tiempo por debajo de 142 ppm, ${Math.round(-delta)} puntos menos que las 5 anteriores — vuelve a frenar desde el primer kilómetro.`;
+}
+
+/**
+ * «En julio has pasado el 59 % del tiempo por debajo de 142 ppm, 12 puntos
+ * más que en junio.»
+ * Compara los DOS últimos meses con base suficiente, y solo si son meses
+ * naturales consecutivos (mayo vs marzo confundiría al lector).
+ * Guardas: ≥4 carreras con pct_z2 por mes, meses consecutivos, cambio ≥10
+ * puntos. Nombra los meses explícitamente → cierta también con datos viejos.
+ */
+function tplZ2Meses(data) {
+  const rs = carrerasZ2pct(data);
+  if (rs.length < 8) return null;                // n mínimo global (4 + 4)
+  const meses = [...porMes(rs).entries()].filter(([, v]) => v.length >= 4);
+  if (meses.length < 2) return null;
+  const [k0, rs0] = meses[meses.length - 2];
+  const [k1, rs1] = meses[meses.length - 1];
+  const sep = (+k1.slice(0, 4) - +k0.slice(0, 4)) * 12 + (+k1.slice(5, 7) - +k0.slice(5, 7));
+  if (sep !== 1) return null;                    // solo meses consecutivos
+  const m0 = media(rs0.map((r) => r.pct_z2));
+  const m1 = media(rs1.map((r) => r.pct_z2));
+  if (!fin(m0) || !fin(m1)) return null;
+  const delta = m1 - m0;
+  if (Math.abs(delta) < 10) return null;         // magnitud mínima: 10 puntos
+  const n0 = mesLargo(`${k0}-01`);
+  const n1 = mesLargo(`${k1}-01`);
+  if (!n0 || !n1) return null;
+  if (delta > 0) {
+    return `En ${n1} has pasado el ${Math.round(m1)} % del tiempo por debajo de 142 ppm, ${Math.round(delta)} puntos más que en ${n0} — la disciplina va a mejor.`;
+  }
+  return `En ${n1} el tiempo por debajo de 142 ppm cae al ${Math.round(m1)} % (${n0}: ${Math.round(m0)} %) — el freno se está soltando.`;
+}
+
+/**
+ * «Tu carrera más disciplinada de julio: 68 % del tiempo por debajo de
+ * 142 ppm el día 14 (3,1 km).»
+ * Guardas: ≥5 carreras con pct_z2 en total, ≥3 en el mes de referencia,
+ * salidas ≥2 km (un trote de 1 km no representa disciplina) y la mejor ≥60 %
+ * — elogiar un «mejor» del 40 % sonaría a burla. Nombra el mes explícitamente
+ * (el de refHoy, es decir, el de los propios datos) → no miente si envejecen.
+ */
+function tplZ2MejorMes(data) {
+  const rs = carrerasZ2pct(data).filter((r) => fin(r.km) && r.km >= 2);
+  if (rs.length < 5) return null;                // n mínimo global
+  const mesRef = refHoy(data).slice(0, 7);
+  const delMes = rs.filter((r) => r.date.slice(0, 7) === mesRef);
+  if (delMes.length < 3) return null;            // n mínimo del mes
+  const mejor = delMes.reduce((a, r) => (r.pct_z2 > a.pct_z2 ? r : a));
+  if (mejor.pct_z2 < 60) return null;            // magnitud mínima del elogio
+  const mes = mesLargo(mejor.date);
+  if (!mes) return null;
+  return `Tu carrera más disciplinada de ${mes}: ${Math.round(mejor.pct_z2)} % del tiempo por debajo de 142 ppm el día ${+mejor.date.slice(8, 10)} (${num(mejor.km)} km).`;
+}
+
+/**
+ * «4 carreras seguidas con más del 70 % del tiempo por debajo de 142 ppm.»
+ * Racha VIVA (contada desde la última carrera hacia atrás), con el récord
+ * histórico como coda. Misma convención que tplRacha: habla de carreras
+ * registradas, no del calendario, así que no necesita guarda de frescura.
+ * Guardas: ≥5 carreras con pct_z2 y racha ≥3 (2 seguidas no es racha).
+ */
+function tplZ2RachaViva(data) {
+  const rs = carrerasZ2pct(data);
+  if (rs.length < 5) return null;                // n mínimo
+  let racha = 0;
+  for (let i = rs.length - 1; i >= 0 && rs[i].pct_z2 > 70; i--) racha++;
+  if (racha < 3) return null;                    // magnitud mínima
+  let mejor = 0;
+  let cur = 0;
+  for (const r of rs) {
+    cur = r.pct_z2 > 70 ? cur + 1 : 0;
+    if (cur > mejor) mejor = cur;
+  }
+  const coda = racha >= mejor ? ' — tu mejor racha del histórico' : ` (récord: ${mejor})`;
+  return `${racha} carreras seguidas con más del 70 % del tiempo por debajo de 142 ppm${coda}.`;
 }
 
 /**
@@ -365,6 +480,57 @@ function tplRecupSueno(data) {
   return `Duermes ${num(m)} h de media esta semana — la adaptación al entrenamiento se fabrica durmiendo.`;
 }
 
+/* ---------- Plantillas de RECUPERACIÓN · Body Battery (fase 3) ---------- */
+/* daily.bb_high = pico diario de Body Battery (0–100), alcanzado tras la
+   recarga nocturna. Son datos DERIVADOS de Garmin, nunca inventados aquí. */
+
+/**
+ * «Tu pico diario de Body Battery baja de 72 a 61 de media semanal.»
+ * Guardas: ≥14 días con bb_high (dos ventanas de 7 con dato), cambio ≥8
+ * puntos (menos es vaivén normal del día a día) y FRESCURA: «esta semana»
+ * habla en presente — con datos congelados >1 día mentiría (§6.6).
+ */
+function tplRecupBbTendencia(data) {
+  const d = dias(data).filter((x) => fin(x.bb_high));
+  if (d.length < 14) return null;                // n mínimo: 7 + 7 con dato
+  if (diffDias(d[d.length - 1].date, isoToday()) > 1) return null; // frescura
+  const ult = media(d.slice(-7).map((x) => x.bb_high));
+  const prev = media(d.slice(-14, -7).map((x) => x.bb_high));
+  if (!fin(ult) || !fin(prev)) return null;
+  const delta = ult - prev;
+  if (Math.abs(delta) < 8) return null;          // magnitud mínima: 8 puntos
+  if (delta > 0) {
+    return `Tu pico diario de Body Battery sube: media de ${Math.round(ult)} esta semana frente a ${Math.round(prev)} la anterior — la recarga nocturna mejora.`;
+  }
+  return `Tu pico diario de Body Battery baja de ${Math.round(prev)} a ${Math.round(ult)} de media semanal — vigila sueño y estrés antes de apretar.`;
+}
+
+/**
+ * «5 noches seguidas recargando la Body Battery a 80 o más.» / «Solo 3 de
+ * tus últimas 14 noches han recargado la Body Battery a 80.»
+ * Dos ramas EXCLUYENTES de la misma señal (nunca se pintan a la vez):
+ * racha buena (≥3 noches seguidas a 80+) o déficit claro (≤4 de las últimas
+ * 14 noches). La zona intermedia calla: no hay nada afirmable con confianza.
+ * Guardas: ≥14 días con bb_high y frescura ≤1 día («noches seguidas» y
+ * «últimas noches» hablan del presente).
+ */
+function tplRecupBb80(data) {
+  const d = dias(data).filter((x) => fin(x.bb_high));
+  if (d.length < 14) return null;                // n mínimo para ambas ramas
+  if (diffDias(d[d.length - 1].date, isoToday()) > 1) return null; // frescura
+  let racha = 0;
+  for (let i = d.length - 1; i >= 0 && d[i].bb_high >= 80; i--) racha++;
+  if (racha >= 3) {
+    return `${racha} noches seguidas recargando la Body Battery a 80 o más — el descanso está haciendo su trabajo.`;
+  }
+  const noches80 = d.slice(-14).filter((x) => x.bb_high >= 80).length;
+  if (noches80 > 4) return null;                 // sin déficit claro → silencio
+  if (noches80 === 0) {
+    return 'Ninguna de tus últimas 14 noches ha recargado la Body Battery a 80 — prioriza dormir antes que sumar kilómetros.';
+  }
+  return `Solo ${noches80} de tus últimas 14 noches han recargado la Body Battery a 80 — prioriza dormir antes que sumar kilómetros.`;
+}
+
 /* ---------- Plantilla de ARCHIVO ---------- */
 
 /** Totales del histórico (+ fuerza si la hay). Guardas: ≥5 carreras. */
@@ -428,10 +594,12 @@ export function insightHoy(data) {
   );
 }
 
-/** Acto 2 · ESTA SEMANA (#insightSemana). */
+/** Acto 2 · ESTA SEMANA (#insightSemana).
+ *  La racha viva de disciplina Z2 entra tras el volumen: si la semana no da
+ *  titular de kilómetros, una racha en curso es la mejor noticia semanal. */
 export function insightSemana(data) {
   return primera(
-    [tplKmSemana, tplRacha],
+    [tplKmSemana, tplZ2RachaViva, tplRacha],
     data,
     'Semana tranquila — los datos siguen acumulándose.',
   );
@@ -446,19 +614,30 @@ export function insightProgreso(data) {
   );
 }
 
-/** Acto 4 · INTENSIDAD Y TÉCNICA (#insightIntensidad). */
+/** Acto 4 · INTENSIDAD Y TÉCNICA (#insightIntensidad).
+ *  Prioridad: cambio reciente (5v5) > cambio mensual > mejor del mes >
+ *  foto global (FC media) > cadencia. Lo nuevo y específico manda; el conteo
+ *  global queda de red de seguridad (su cifra ya vive en el KPI de zonas).
+ *  NOTA fase 3: se DESCARTARON los cruces pct_z2×temp_c y pct_z2×EF — con
+ *  los 34 puntos actuales |r|<0,3 (0,21 y −0,29): correlación insuficiente
+ *  para afirmar nada sin mentir (§6.6). Reevaluar con más histórico. */
 export function insightIntensidad(data) {
   return primera(
-    [tplDisciplinaZ2, tplGapCadencia],
+    [tplZ2Tendencia5, tplZ2Meses, tplZ2MejorMes, tplDisciplinaZ2, tplGapCadencia],
     data,
     'Rueda suave y deja que la técnica llegue con los kilómetros.',
   );
 }
 
-/** Acto 5 · RECUPERACIÓN (#insightRecuperacion). */
+/** Acto 5 · RECUPERACIÓN (#insightRecuperacion).
+ *  Prioridad: déficit de sueño (lo más accionable) > movimientos de Body
+ *  Battery (fase 3) > HRV semanal como cierre informativo.
+ *  NOTA fase 3: statusHistory NO alimenta plantillas todavía — con 1–2
+ *  puntos cualquier «tendencia» de VO2max/carga sería inventada; se añadirá
+ *  cuando el histórico acumule ≥14 puntos reales. */
 export function insightRecuperacion(data) {
   return primera(
-    [tplRecupSueno, tplRecupHrv],
+    [tplRecupSueno, tplRecupBbTendencia, tplRecupBb80, tplRecupHrv],
     data,
     'Recuperación sin señales de alarma — sigue cuidando el sueño.',
   );
