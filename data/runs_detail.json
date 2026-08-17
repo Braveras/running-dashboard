@@ -2776,5 +2776,62 @@
     "zone": 5
    }
   ]
+ },
+ "24003054977": {
+  "pct_z2": 72.2,
+  "splits": [
+   {
+    "cadence": 139,
+    "dur_s": 525,
+    "elev_gain": 2.0,
+    "elev_loss": 8.0,
+    "hr": 131.0,
+    "hr_max": 152.0,
+    "km": 1.0,
+    "power": 211.0
+   },
+   {
+    "cadence": 147,
+    "dur_s": 331,
+    "elev_gain": 0.0,
+    "elev_loss": 14.0,
+    "hr": 141.0,
+    "hr_max": 146.0,
+    "km": 0.66,
+    "power": 221.0
+   }
+  ],
+  "weather": {
+   "humidity": 21,
+   "temp_c": 32.2,
+   "temp_raw": 90
+  },
+  "zones": [
+   {
+    "low": 100,
+    "secs": 119,
+    "zone": 1
+   },
+   {
+    "low": 120,
+    "secs": 361,
+    "zone": 2
+   },
+   {
+    "low": 140,
+    "secs": 376,
+    "zone": 3
+   },
+   {
+    "low": 160,
+    "secs": 0,
+    "zone": 4
+   },
+   {
+    "low": 180,
+    "secs": 0,
+    "zone": 5
+   }
+  ]
  }
 }

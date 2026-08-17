@@ -2689,11 +2689,28 @@
   "date": "2026-08-15"
  },
  {
-  "bb_charged": null,
-  "bb_drained": null,
-  "bb_high": null,
-  "bb_last": null,
-  "bb_low": null,
+  "bb_charged": 1,
+  "bb_drained": 32,
+  "bb_high": 41,
+  "bb_last": 10,
+  "bb_low": 10,
   "date": "2026-08-16"
+ },
+ {
+  "bb_charged": 50,
+  "bb_drained": 5,
+  "bb_high": 55,
+  "bb_last": 55,
+  "bb_low": 5,
+  "bedtime": 1.7,
+  "date": "2026-08-17",
+  "deep_pct": 16.4,
+  "hrv": 47,
+  "hrv_status": "BALANCED",
+  "party": false,
+  "rem_pct": 6.6,
+  "sleep_hours": 6.3,
+  "sleep_score": 63,
+  "sleep_stress": 18.0
  }
 ]
