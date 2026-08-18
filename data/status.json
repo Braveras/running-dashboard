@@ -1,15 +1,15 @@
 {
- "acute_load": 15,
+ "acute_load": 33,
  "chronic_load": 137,
- "date": "2026-08-17",
+ "date": "2026-08-18",
  "hrv_baseline": {
   "balancedLow": 50,
   "balancedUpper": 93,
   "lowUpper": 43,
-  "markerValue": 0.43603516
+  "markerValue": 0.37789917
  },
  "optimal_max": 205.5,
  "optimal_min": 109.60000000000001,
- "status_feedback": "RECOVERY_2",
- "vo2max": 44.9
+ "status_feedback": "RECOVERY_1",
+ "vo2max": 44.4
 }
