@@ -754,5 +754,26 @@
   "start_hour": 21.6,
   "temp_c": 33.9,
   "type": "running"
+ },
+ {
+  "bedtime_prev": 23.17,
+  "cadence": 143,
+  "calories": 271.0,
+  "date": "2026-08-21",
+  "dur_s": 1780,
+  "ef": 0.85,
+  "hr": 141.0,
+  "hr_max": 159.0,
+  "hrv_morning": 62,
+  "id": 24057138746,
+  "km": 3.55,
+  "pace_s": 501,
+  "rem_pct_prev": 1.5,
+  "sleep_hours_prev": 7.82,
+  "sleep_score_prev": 60,
+  "start": "2026-08-21T08:13:22",
+  "start_hour": 8.22,
+  "temp_c": 18.9,
+  "type": "running"
  }
 ]
