@@ -26,6 +26,23 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install "garminconnect==0.3.5" tzdata
+      # ANTES de tocar Garmin: cada fetch consume el refresh token y el nuevo
+      # solo sobrevive si podemos re-guardarlo en el secret. Con el PAT muerto,
+      # seguir adelante quema tokens (Garmin revoca la familia al 3er reuso —
+      # averías de jul y ago 2026). Mejor abortar aquí: la web sigue sirviendo
+      # los últimos datos y el token queda intacto hasta renovar el PAT.
+      - name: Check ACTIONS_PAT can write secrets
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Falta el secret ACTIONS_PAT."; exit 1
+          fi
+          if ! gh api "repos/$GITHUB_REPOSITORY/actions/secrets/public-key" --silent; then
+            echo "::error::ACTIONS_PAT inválido o caducado (401). Renueva el PAT y actualiza el secret ACTIONS_PAT. El token Garmin NO se ha consumido."
+            exit 1
+          fi
+          echo "PAT OK."
       - name: Fetch Garmin data
         env:
           GARMIN_TOKENS_B64: ${{ secrets.GARMIN_TOKENS_B64 }}
@@ -52,17 +69,21 @@ jobs:
         with:
           path: site
       - uses: actions/deploy-pages@v4
-      # Al final: si el PAT caduca, el fallo no bloquea commit ni deploy
-      # (el run sigue saliendo en rojo para avisar).
+      # Al final para no bloquear commit ni deploy. El PAT ya se validó arriba;
+      # aquí solo quedan fallos transitorios -> 3 intentos antes de rendirse.
       - name: Rotate token secret
-        if: env.HAS_PAT == 'true'
+        if: always() && env.HAS_PAT == 'true'
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PAT }}
         run: |
-          if [ -f .garmin_tokens_new ]; then
-            base64 -w0 .garmin_tokens_new | gh secret set GARMIN_TOKENS_B64 --repo "$GITHUB_REPOSITORY"
-            echo "Secret GARMIN_TOKENS_B64 rotado."
-            rm .garmin_tokens_new
-          else
-            echo "Sin token nuevo que rotar (fetch no lo volcó)."
+          if [ ! -f .garmin_tokens_new ]; then
+            echo "Sin token nuevo que rotar (fetch no lo volcó)."; exit 0
           fi
+          for i in 1 2 3; do
+            if base64 -w0 .garmin_tokens_new | gh secret set GARMIN_TOKENS_B64 --repo "$GITHUB_REPOSITORY"; then
+              echo "Secret GARMIN_TOKENS_B64 rotado."; rm .garmin_tokens_new; exit 0
+            fi
+            echo "Intento $i/3 falló, reintentando en 20s..."; sleep 20
+          done
+          echo "::error::No se pudo rotar GARMIN_TOKENS_B64 tras 3 intentos. El token Garmin del secret está desfasado: si el próximo run falla con invalid_grant, regenerar con scripts/login.py."
+          exit 1
