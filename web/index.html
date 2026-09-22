@@ -17,7 +17,7 @@
       } catch (e) { /* sin localStorage: tema oscuro por defecto */ }
     })();
   </script>
-  <title>Zona Dos · Cuaderno de entrenamiento</title>
+  <title>Zona Dos · Salud</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -30,22 +30,27 @@
 
   <header class="site-header">
     <h1>Zona Dos</h1>
-    <p class="subtitle">Cuaderno de entrenamiento · Madrid</p>
+    <p class="subtitle">Cuaderno de salud · Madrid</p>
     <!-- Insight del día: lo rellena app.js desde insights.js (fallback neutro incluido allí) -->
     <p id="insightDia" class="insight-dia"></p>
   </header>
 
-  <!-- Barra sticky: anclas de actos + rango global + chip de frescura -->
-  <nav id="stickyBar" class="sticky-bar" aria-label="Navegación del cuaderno">
+  <!-- Barra sticky: tab bar accesible (§4 spec salud) + rango global + chip de frescura -->
+  <nav id="stickyBar" class="sticky-bar" aria-label="Navegación del panel">
     <div class="sticky-inner">
-      <ul class="acts-nav">
-        <li><a class="nav-link" href="#acto-hoy">Hoy</a></li>
-        <li><a class="nav-link" href="#acto-semana">Semana</a></li>
-        <li><a class="nav-link" href="#acto-progreso">Progreso</a></li>
-        <li><a class="nav-link" href="#acto-intensidad">Intensidad</a></li>
-        <li><a class="nav-link" href="#acto-recuperacion">Recuperación</a></li>
-        <li><a class="nav-link" href="#acto-archivo">Archivo</a></li>
-      </ul>
+      <!-- Tablist: aria-selected/tabindex (roving) los gobierna app.js; flechas ←/→, Home/End -->
+      <div id="tabBar" class="tab-bar" role="tablist" aria-label="Secciones del panel">
+        <button type="button" role="tab" id="tab-hoy" class="tab-btn" data-tab="hoy"
+                aria-selected="true" aria-controls="panel-hoy">Hoy</button>
+        <button type="button" role="tab" id="tab-entrenar" class="tab-btn" data-tab="entrenar"
+                aria-selected="false" tabindex="-1" aria-controls="panel-entrenar">Entrenar</button>
+        <button type="button" role="tab" id="tab-recuperar" class="tab-btn" data-tab="recuperar"
+                aria-selected="false" tabindex="-1" aria-controls="panel-recuperar">Recuperar</button>
+        <button type="button" role="tab" id="tab-cuerpo" class="tab-btn" data-tab="cuerpo"
+                aria-selected="false" tabindex="-1" aria-controls="panel-cuerpo">Cuerpo</button>
+        <button type="button" role="tab" id="tab-archivo" class="tab-btn" data-tab="archivo"
+                aria-selected="false" tabindex="-1" aria-controls="panel-archivo">Archivo</button>
+      </div>
       <div id="rangeSelector" class="range-selector" role="group" aria-label="Rango temporal">
         <button type="button" class="range-btn" data-range="7"  aria-pressed="false">7d</button>
         <button type="button" class="range-btn" data-range="30" aria-pressed="false">30d</button>
@@ -60,17 +65,16 @@
 
   <main>
 
-    <!-- ============ ACTO 1 · HOY ============ -->
-    <section id="acto-hoy" class="acto" aria-labelledby="h-hoy">
-      <h2 id="h-hoy"><span class="acto-num">Acto 1</span> Hoy</h2>
+    <!-- ============ PESTAÑA HOY — «¿cómo estoy y qué hago?» (toda la pestaña ignora el rango) ============ -->
+    <section id="panel-hoy" class="panel" role="tabpanel" aria-labelledby="tab-hoy" tabindex="-1">
+      <h2 class="sr-only">Hoy</h2>
       <p id="insightHoy" class="insight"></p>
 
-      <!-- 1.1 Semáforo hero: estado GRIS NEUTRO mientras carga (nunca ámbar hardcodeado).
-           today.js cambia la clase estado-* y rellena icono, mensaje, razones y bullet bars. -->
+      <!-- 2.1 Semáforo hero [existente + adición Garmin]. Estado GRIS NEUTRO mientras
+           carga (nunca ámbar hardcodeado). today.js cambia la clase estado-* y rellena
+           icono, mensaje, razones, bullet bars, #garminOpina y #kpiAcuerdo. -->
       <article id="cardSemaforo" class="card hero-card estado-neutro">
         <h3 class="sr-only">Estado de hoy</h3>
-        <!-- Regla §4 «sin excepciones»: card exenta del rango → badge. Aquí el texto
-             es «hoy» (no «histórico completo») porque la card muestra el estado de HOY. -->
         <span class="badge-historico badge-hero">⟳ hoy · ignora el rango</span>
         <div class="hero-main">
           <div id="semaforoIcono" class="hero-icon" aria-hidden="true">·</div>
@@ -78,6 +82,10 @@
             <span id="semaforoSr" class="sr-only">Semáforo: cargando</span>
             <p id="semaforoMensaje" class="hero-mensaje">Cargando datos…</p>
             <ul id="semaforoRazones" class="hero-razones"></ul>
+            <!-- §2.1: «Garmin opina: readiness 58 · moderado — buena recuperación»
+                 o «Garmin aún no ha puntuado hoy» (sin sync matinal). Segunda opinión
+                 ETIQUETADA, jamás fusionada con el semáforo. -->
+            <p id="garminOpina" class="garmin-opina"></p>
           </div>
         </div>
         <aside class="hero-bullets" aria-label="Indicadores de hoy">
@@ -86,22 +94,41 @@
           <div id="bulletAcwr" class="bullet"></div>
           <p id="acwrNota" class="note"></p>
         </aside>
+        <!-- §2.1: «semáforo y Garmin coinciden N de M días» — guarda n≥20 o queda vacío -->
+        <p id="kpiAcuerdo" class="kpi-acuerdo"></p>
+      </article>
+
+      <!-- 2.2 Desglose de readiness [nueva] — today.js:renderDesgloseReadiness -->
+      <article id="cardDesgloseReadiness" class="card">
+        <h3>Desglose de readiness <span class="badge-historico">⟳ hoy</span></h3>
+        <div class="chart-wrap">
+          <canvas id="chartDesgloseReadiness" role="img"
+                  aria-label="Barras horizontales de cero a cien con los seis factores del readiness de Garmin de hoy"></canvas>
+        </div>
+        <p class="note">Los 6 factores del readiness de Garmin (0–100), en orden fijo · el veredicto de Garmin traducido va como texto, jamás coloreando la barra</p>
+      </article>
+
+      <!-- 2.3 Constantes de hoy [nueva] — today.js:renderConstantes (tiles + sparkline.js) -->
+      <article id="cardConstantes" class="card">
+        <h3>Constantes de hoy <span class="badge-historico">⟳ hoy</span></h3>
+        <div id="constantesTiles" class="tiles-grid"></div>
+        <p class="note">Sparklines: últimos 14 días · percentil personal sobre tus últimos 90 días (solo con n≥60) · «— sin dato» si falta el día</p>
       </article>
     </section>
 
-    <!-- ============ ACTO 2 · ESTA SEMANA ============ -->
-    <section id="acto-semana" class="acto" aria-labelledby="h-semana">
-      <h2 id="h-semana"><span class="acto-num">Acto 2</span> Esta semana</h2>
-      <p id="insightSemana" class="insight"></p>
+    <!-- ============ PESTAÑA ENTRENAR — el capítulo running completo ============ -->
+    <section id="panel-entrenar" class="panel" role="tabpanel" aria-labelledby="tab-entrenar" tabindex="-1" hidden>
+      <h2 class="sr-only">Entrenar</h2>
+      <p id="insightEntrenar" class="insight"></p>
 
-      <!-- 2.1 Stat-tiles con sparklines (today.js + sparkline.js) -->
+      <!-- 2.4a Stat-tiles con sparklines [existente] (el tile de peso emigra a Cuerpo) -->
       <article id="cardTiles" class="card">
         <h3>Esta semana en cifras <span class="badge-historico">⟳ histórico completo</span></h3>
         <div id="statTiles" class="tiles-grid"></div>
         <p class="note">Sparklines: evolución reciente · deltas frente a la media de 4 semanas · solo «Tiempo total» respeta el rango elegido</p>
       </article>
 
-      <!-- 2.2 Km por semana ISO + media móvil 4 sem -->
+      <!-- 2.4b Km por semana ISO + media móvil 4 sem [existente] -->
       <article id="cardKmSemana" class="card">
         <h3>Km por semana</h3>
         <div class="chart-wrap">
@@ -110,21 +137,7 @@
         <p class="note">Barras: km por semana ISO · línea: media móvil de 4 semanas · la semana en curso va al 40 % y con etiqueta «en curso»</p>
       </article>
 
-      <!-- 2.3 Récords personales + predicciones (charts.js:renderPRs) -->
-      <article id="cardPRs" class="card">
-        <h3>Récords personales y predicciones <span class="badge-historico">⟳ histórico completo</span></h3>
-        <div id="prList" class="pr-list"></div>
-        <div id="predicciones" class="predicciones"></div>
-        <p class="note">Predicciones Riegel (exp. 1.06) sobre tu mejor esfuerzo real · la equivalencia del VO₂max 45 de Garmin marca el potencial</p>
-      </article>
-    </section>
-
-    <!-- ============ ACTO 3 · PROGRESO ============ -->
-    <section id="acto-progreso" class="acto" aria-labelledby="h-progreso">
-      <h2 id="h-progreso"><span class="acto-num">Acto 3</span> Progreso</h2>
-      <p id="insightProgreso" class="insight"></p>
-
-      <!-- 3.1 Eficiencia aeróbica -->
+      <!-- 2.5a Eficiencia aeróbica [existente] -->
       <article id="cardEF" class="card">
         <h3>Eficiencia aeróbica (EF) <span id="efBadge" class="badge-metric"></span></h3>
         <div class="chart-wrap">
@@ -133,7 +146,7 @@
         <p class="note">☀ = carrera con más de 24 °C: el calor de Madrid infla la FC, no es retroceso · «ajustado» es una estimación (~1,5 % por cada 5 °C sobre 15 °C)</p>
       </article>
 
-      <!-- 3.2 Ritmo y FC media: small multiples, eje X común, crosshair sincronizado -->
+      <!-- 2.5b Ritmo y FC media [existente]: small multiples, eje X común -->
       <article id="cardRitmoFc" class="card">
         <h3>Ritmo y FC media</h3>
         <div class="chart-wrap chart-wrap--sm">
@@ -145,7 +158,7 @@
         <p class="note">Ritmo con eje invertido: más rápido arriba · línea discontinua: techo Z2 (142 ppm)</p>
       </article>
 
-      <!-- 3.3 Desacople aeróbico -->
+      <!-- 2.5c Desacople aeróbico [existente] -->
       <article id="cardDesacople" class="card">
         <h3>Desacople aeróbico</h3>
         <div class="chart-wrap">
@@ -154,27 +167,9 @@
         <p class="note">Drift de EF entre 1.ª y 2.ª mitad · solo carreras ≥3 km · umbrales 5 % y 10 % etiquetados · ☀ = más de 24 °C</p>
       </article>
 
-      <!-- 3.4 Mes a mes: tabla compacta sin canvas -->
-      <article id="cardMensual" class="card">
-        <h3>Mes a mes <span class="badge-historico">⟳ histórico completo</span></h3>
-        <div class="table-wrap">
-          <table id="tablaMensual">
-            <thead>
-              <tr><th>Mes</th><th class="num">Km</th><th class="num">Ritmo</th><th class="num">FC</th><th class="num">EF</th><th class="num">Cadencia</th></tr>
-            </thead>
-            <tbody id="tablaMensualBody"></tbody>
-          </table>
-        </div>
-        <p class="note">Flechas ▲▼ frente al mes anterior · el verde/rojo indica juicio (mejor/peor), nunca series de datos</p>
-      </article>
-    </section>
-
-    <!-- ============ ACTO 4 · INTENSIDAD Y TÉCNICA ============ -->
-    <section id="acto-intensidad" class="acto" aria-labelledby="h-intensidad">
-      <h2 id="h-intensidad"><span class="acto-num">Acto 4</span> Intensidad y técnica</h2>
-      <p id="insightIntensidad" class="insight"></p>
-
-      <!-- 4.1 Tiempo en zonas FC (rampa azul §2.4) -->
+      <!-- 2.6a Tiempo en zonas FC [existente, 1 mejora]: el KPI lateral gana
+           «% tiempo real ≤142» ponderado por duración desde runs_detail.json:pct_z2.
+           La nota obsoleta «requiere un export futuro» MUERE (§2.6). -->
       <article id="cardZonas" class="card">
         <h3>Tiempo en zonas de FC <span class="badge-historico">⟳ histórico completo</span></h3>
         <div class="zonas-layout">
@@ -183,10 +178,10 @@
           </div>
           <aside id="kpiZonas" class="kpi-side" aria-label="Porcentaje de tiempo en zonas 1 y 2"></aside>
         </div>
-        <p class="note">Zonas Garmin: el techo 142 cae dentro de la Z3 Garmin (134–153) · el % exacto ≤142 requiere un export futuro, hoy no está disponible</p>
+        <p class="note">Zonas Garmin: el techo 142 cae dentro de la Z3 Garmin (134–153) · «% tiempo real ≤142»: media ponderada por duración desde los splits (carreras sin dato se excluyen y se cuentan)</p>
       </article>
 
-      <!-- 4.2 Control de intensidad -->
+      <!-- 2.6b Control de intensidad [existente] -->
       <article id="cardIntensidad" class="card">
         <h3>Control de intensidad</h3>
         <p id="kpiIntensidad" class="kpi-line"></p>
@@ -196,7 +191,7 @@
         <p class="note">Puntos con anillo claro: FC media por encima de 142 ppm</p>
       </article>
 
-      <!-- 4.3 Cadencia -->
+      <!-- 2.6c Cadencia [existente] -->
       <article id="cardCadencia" class="card">
         <h3>Cadencia</h3>
         <p id="kpiCadencia" class="kpi-line"></p>
@@ -205,14 +200,81 @@
         </div>
         <p class="note">Banda gris: objetivo 160–165 spm · outliers &lt;120 spm excluidos (se indica cuántos)</p>
       </article>
+
+      <!-- 2.6d Mes a mes [existente, gana columna «% Z2 real»] -->
+      <article id="cardMensual" class="card">
+        <h3>Mes a mes <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div class="table-wrap">
+          <table id="tablaMensual">
+            <thead>
+              <tr><th>Mes</th><th class="num">Km</th><th class="num">Ritmo</th><th class="num">FC</th><th class="num">EF</th><th class="num">Cadencia</th><th class="num">% Z2</th></tr>
+            </thead>
+            <tbody id="tablaMensualBody"></tbody>
+          </table>
+        </div>
+        <p class="note">Flechas ▲▼ frente al mes anterior · el verde/rojo indica juicio (mejor/peor), nunca series de datos · % Z2: tiempo real ≤142 ponderado por duración</p>
+      </article>
+
+      <!-- [TRANSICIÓN] Récords computados en cliente [existente]: app.js la OCULTA
+           automáticamente cuando entrenar-garmin.js (renderPRsOficiales +
+           renderPredicciones) esté desplegado — la sustituyen las dos cards
+           siguientes (§4 spec salud). Mientras tanto garantiza la paridad. -->
+      <article id="cardPRs" class="card">
+        <h3>Récords personales y predicciones <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div id="prList" class="pr-list"></div>
+        <div id="predicciones" class="predicciones"></div>
+        <p class="note">Predicciones Riegel (exp. 1.06) sobre tu mejor esfuerzo real · la equivalencia del VO₂max 45 de Garmin marca el potencial</p>
+      </article>
+
+      <!-- 2.7 Récords oficiales Garmin [nueva] — entrenar-garmin.js:renderPRsOficiales -->
+      <article id="cardPRsOficiales" class="card">
+        <h3>Récords oficiales Garmin <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div id="prOficialesList" class="pr-list"></div>
+        <p class="note">Los 9 récords oficiales de Garmin Connect · tipo sin mapear → «Récord tipo N» · click en un récord abre la carrera si está en el cuaderno</p>
+      </article>
+
+      <!-- 2.8 Predicciones de carrera Garmin [nueva] — entrenar-garmin.js:renderPredicciones -->
+      <article id="cardPredicciones" class="card">
+        <h3>Predicciones de carrera <span id="predBadge" class="badge-metric"></span> <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div id="prediccionesGarmin" class="kpi-grid"></div>
+        <div class="explorer-controls pred-controls">
+          <label>Distancia
+            <select id="predDistancia"></select>
+          </label>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chartPredicciones" role="img" aria-label="Tendencia de la predicción de tiempo de carrera de Garmin para la distancia elegida"></canvas>
+        </div>
+        <p class="note">Garmin (modelo Firstbeat, extrapola de tu VO₂max) vs Riegel sobre tu mejor esfuerzo real · la tendencia se activa con ≥14 snapshots</p>
+      </article>
+
+      <!-- 2.9 Umbral de lactato y potencia [nueva, KPI sin canvas] — entrenar-garmin.js:renderUmbral -->
+      <article id="cardUmbral" class="card">
+        <h3>Umbral de lactato y potencia <span id="umbralBadge" class="badge-metric"></span> <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div id="umbralKpis" class="kpi-grid"></div>
+        <p class="note">Lo recalcula el reloj esporádicamente; puede pasar semanas sin cambiar · FTP «estimado por peso, no medido» · el ritmo de umbral no se publica hasta verificar su unidad contra la app</p>
+      </article>
+
+      <!-- 2.10 Carga y VO2max Garmin [nueva] — entrenar-garmin.js:renderCargaGarmin.
+           Small multiples con eje X común, JAMÁS doble eje. -->
+      <article id="cardCargaGarmin" class="card">
+        <h3>Carga y VO₂max (Garmin) <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div class="chart-wrap chart-wrap--sm">
+          <canvas id="chartCarga" role="img" aria-label="Carga aguda y crónica de entrenamiento de Garmin con banda de rango óptimo"></canvas>
+        </div>
+        <div class="chart-wrap chart-wrap--sm">
+          <canvas id="chartVo2max" role="img" aria-label="VO2 máximo estimado por Garmin como línea escalonada con puntos solo en los cambios"></canvas>
+        </div>
+        <p class="note">Banda gris: rango óptimo de carga (referencia, no estado) · VO₂max escalonado: puntos solo en cambios · se pinta con ≥14 puntos no nulos</p>
+      </article>
     </section>
 
-    <!-- ============ ACTO 5 · RECUPERACIÓN ============ -->
-    <section id="acto-recuperacion" class="acto" aria-labelledby="h-recuperacion">
-      <h2 id="h-recuperacion"><span class="acto-num">Acto 5</span> Recuperación</h2>
-      <p id="insightRecuperacion" class="insight"></p>
+    <!-- ============ PESTAÑA RECUPERAR — sueño, HRV, estrés crónico y energía ============ -->
+    <section id="panel-recuperar" class="panel" role="tabpanel" aria-labelledby="tab-recuperar" tabindex="-1" hidden>
+      <h2 class="sr-only">Recuperar</h2>
+      <p id="insightRecuperar" class="insight"></p>
 
-      <!-- 5.1 Sueño: fases reales apiladas (rampa violeta §2.4) -->
+      <!-- 2.11a Sueño: fases y horas [existente] -->
       <article id="cardSueno" class="card">
         <h3>Sueño: fases y horas</h3>
         <div class="chart-wrap">
@@ -221,22 +283,156 @@
         <p class="note">Fases reales: profundo, REM y ligero (resto) · score y hora de acostarse en el tooltip</p>
       </article>
 
-      <!-- 5.2 HRV nocturno -->
+      <!-- 2.11b HRV nocturno [existente] -->
       <article id="cardHrv" class="card">
         <h3>HRV nocturno</h3>
         <div class="chart-wrap">
-          <canvas id="chartHrv" role="img" aria-label="Variabilidad de la frecuencia cardiaca nocturna con banda de referencia entre 51 y 91"></canvas>
+          <canvas id="chartHrv" role="img" aria-label="Variabilidad de la frecuencia cardiaca nocturna con banda de referencia dinámica"></canvas>
         </div>
-        <p class="note">Banda gris: baseline 51–91 ms (referencia, no estado) · último valor con etiqueta directa</p>
+        <p class="note">Banda gris: baseline dinámica de Garmin (referencia, no estado) · último valor con etiqueta directa</p>
+      </article>
+
+      <!-- 2.12 Training Readiness en el tiempo [nueva] — recuperar.js:renderReadinessTiempo -->
+      <article id="cardReadinessTiempo" class="card">
+        <h3>Training Readiness en el tiempo</h3>
+        <div class="chart-wrap">
+          <canvas id="chartReadiness" role="img" aria-label="Puntuación diaria de Training Readiness de Garmin de cero a cien con media móvil de siete días"></canvas>
+        </div>
+        <p class="note">El score resume sueño, HRV, recuperación, estrés y carga: es la síntesis de Garmin; el semáforo de Hoy es la nuestra · el nivel va en el tooltip, traducido</p>
+      </article>
+
+      <!-- 2.13 Estrés diario [nueva] — recuperar.js:renderEstresDiario -->
+      <article id="cardEstresDiario" class="card">
+        <h3>Estrés diario</h3>
+        <div class="chart-wrap">
+          <canvas id="chartEstres" role="img" aria-label="Estrés medio diario de Garmin con media móvil de siete días"></canvas>
+        </div>
+        <p class="note">0–25 reposo · 26–50 bajo · 51–75 medio · 76–100 alto — escala Garmin, estimación propietaria · máximo del día y qualifier en el tooltip</p>
+      </article>
+
+      <!-- 2.14 Reparto semanal del estrés [nueva, RAMPA_ESTRES validada §6] — recuperar.js:renderEstresSemanal -->
+      <article id="cardEstresSemanal" class="card">
+        <h3>Reparto del tiempo con medición de estrés</h3>
+        <div class="chart-wrap">
+          <canvas id="chartEstresSemanal" role="img" aria-label="Barras apiladas al cien por cien por semana con el reparto del tiempo en estrés de reposo, bajo, medio y alto"></canvas>
+        </div>
+        <p class="note">Las 4 categorías medidas se normalizan sobre su propia suma (actividad y tiempo sin clasificar quedan fuera) · claro = reposo → oscuro = alto</p>
+      </article>
+
+      <!-- 2.15 Body Battery: rango diario [nueva] — recuperar.js:renderBodyBattery -->
+      <article id="cardBodyBattery" class="card">
+        <h3>Body Battery: rango diario</h3>
+        <div class="chart-wrap">
+          <canvas id="chartBodyBattery" role="img" aria-label="Barras flotantes del rango alto a bajo de Body Battery por día con punto en el último valor"></canvas>
+        </div>
+        <p class="note">Barra: rango alto–bajo del día · punto: último valor registrado · cargado y drenado en el tooltip</p>
+      </article>
+
+      <!-- 2.16 Mes a mes: recuperación [nueva, injerto Atlas] — recuperar.js:renderMensualRecuperacion -->
+      <article id="cardMensualRecuperacion" class="card">
+        <h3>Mes a mes: recuperación <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div class="table-wrap">
+          <table id="tablaRecuperacion">
+            <thead>
+              <tr><th>Mes</th><th class="num">Sueño</th><th class="num">Score</th><th class="num">HRV</th><th class="num">Estrés</th><th class="num">Readiness</th><th class="num">BB máx</th></tr>
+            </thead>
+            <tbody id="tablaRecuperacionBody"></tbody>
+          </table>
+        </div>
+        <p class="note">Flechas ▲▼ frente al mes anterior con dirección de juicio por métrica: en estrés, bajar es ▲ mejora</p>
       </article>
     </section>
 
-    <!-- ============ ACTO 6 · ARCHIVO ============ -->
-    <section id="acto-archivo" class="acto" aria-labelledby="h-archivo">
-      <h2 id="h-archivo"><span class="acto-num">Acto 6</span> Archivo</h2>
+    <!-- ============ PESTAÑA CUERPO — el panel del médico de cabecera ============ -->
+    <section id="panel-cuerpo" class="panel" role="tabpanel" aria-labelledby="tab-cuerpo" tabindex="-1" hidden>
+      <h2 class="sr-only">Cuerpo</h2>
+      <!-- Nota fija de no-diagnóstico (§2, honestidad clínica — NO se toca ni se oculta) -->
+      <p class="nota-medica"><strong>Estos datos vienen de un sensor de muñeca: son orientativos y NO sustituyen una medición ni un criterio médico.</strong></p>
+      <p id="insightCuerpo" class="insight"></p>
+
+      <!-- 2.17 FC en reposo [nueva] — cuerpo.js:renderRhr -->
+      <article id="cardRhr" class="card">
+        <h3>FC en reposo</h3>
+        <div class="chart-wrap">
+          <canvas id="chartRhr" role="img" aria-label="Frecuencia cardiaca en reposo diaria con media móvil de siete días, banda de referencia poblacional y percentiles personales"></canvas>
+        </div>
+        <p class="note">Banda gris: 60–100 lpm rango adulto habitual · corredores habituados: 45–60 (referencia poblacional, no estado) · líneas finas: p10/p50/p90 de tus últimos 90 días · la RHR baja con el entrenamiento aeróbico en semanas-meses: esta es la gráfica lenta del panel</p>
+      </article>
+
+      <!-- 2.18 SpO2 del sueño [nueva] — cuerpo.js:renderSpo2 -->
+      <article id="cardSpo2" class="card">
+        <h3>SpO₂ del sueño</h3>
+        <div class="chart-wrap">
+          <canvas id="chartSpo2" role="img" aria-label="Saturación de oxígeno media del sueño con los mínimos diarios como triángulos sueltos y banda de referencia"></canvas>
+        </div>
+        <p class="note">≥95 % típico a nivel del mar · Madrid ~660 m puede restar ~1 punto · el pulsioxímetro de muñeca infravalora con movimiento: un mínimo aislado casi nunca es real · triángulos: mínimos diarios, sin unir</p>
+      </article>
+
+      <!-- 2.19 Respiración [nueva] — cuerpo.js:renderRespiracion -->
+      <article id="cardRespiracion" class="card">
+        <h3>Respiración</h3>
+        <div class="chart-wrap">
+          <canvas id="chartRespiracion" role="img" aria-label="Respiraciones por minuto en vigilia y durante el sueño con referencia de doce a veinte en vigilia"></canvas>
+        </div>
+        <p class="note">12–20 rpm en vigilia: rango adulto habitual (referencia, no estado) · la divergencia estable entre vigilia y sueño es lo esperable</p>
+      </article>
+
+      <!-- 2.20 Edad fitness [nueva] — hero de la pestaña — cuerpo.js:renderEdadFitness -->
+      <article id="cardEdadFitness" class="card">
+        <h3>Edad fitness <span id="edadFitnessBadge" class="badge-metric"></span> <span class="badge-historico">⟳ hoy · ignora el rango</span></h3>
+        <div id="edadFitnessCifras" class="ef-cifras"></div>
+        <p id="edadFitnessFrase" class="kpi-line"></p>
+        <div id="edadFitnessBullets" class="ef-bullets"></div>
+        <p id="edadFitnessPalanca" class="kpi-line"></p>
+        <div class="chart-wrap chart-wrap--sm">
+          <canvas id="chartEdadFitness" role="img" aria-label="Tendencia de la edad fitness estimada por Garmin"></canvas>
+        </div>
+        <p class="note">Componentes con su objetivo Garmin en bullet bars · «dato antiguo» = el reloj no lo ha refrescado · FC reposo: solo valor, Garmin no da objetivo para ella</p>
+      </article>
+
+      <!-- 2.21 Peso e IMC [nueva card; el tile de Entrenar muere] — cuerpo.js:renderPeso -->
+      <article id="cardPeso" class="card">
+        <h3>Peso e IMC <span class="badge-historico">⟳ histórico completo</span></h3>
+        <p id="kpiImc" class="kpi-line"></p>
+        <div class="chart-wrap">
+          <canvas id="chartPeso" role="img" aria-label="Pesajes registrados unidos con línea y bandas de referencia del índice de masa corporal de la OMS"></canvas>
+        </div>
+        <p class="note">Tu báscula solo envía peso: % graso, masa muscular y agua llegan vacíos — no se muestran porque no existen · bandas OMS del IMC (18,5–25 normal · 25–30 sobrepeso): referencia gris, no estado</p>
+      </article>
+
+      <!-- 2.22 Actividad diaria y recomendación OMS [nueva] — cuerpo.js:renderActividad -->
+      <article id="cardActividad" class="card">
+        <h3>Actividad diaria y recomendación OMS</h3>
+        <div class="chart-wrap chart-wrap--sm">
+          <canvas id="chartPasos" role="img" aria-label="Pasos por día con la línea escalonada del objetivo dinámico de Garmin"></canvas>
+        </div>
+        <div class="chart-wrap chart-wrap--sm">
+          <canvas id="chartIntensidadSemanal" role="img" aria-label="Minutos de intensidad ponderados por semana frente a la recomendación de ciento cincuenta minutos de la OMS"></canvas>
+        </div>
+        <p class="note">Objetivo de pasos dinámico (lo ajusta Garmin a diario) · minutos ponderados: moderados + 2×vigorosos, como cuentan Garmin y la OMS · referencia: 150 min/sem</p>
+      </article>
+
+      <!-- 2.23 Mes a mes: cuerpo [nueva, injerto Atlas] — cuerpo.js:renderMensualCuerpo -->
+      <article id="cardMensualCuerpo" class="card">
+        <h3>Mes a mes: cuerpo <span class="badge-historico">⟳ histórico completo</span></h3>
+        <div class="table-wrap">
+          <table id="tablaCuerpo">
+            <thead>
+              <tr><th>Mes</th><th class="num">Peso</th><th class="num">RHR</th><th class="num">VO₂max</th><th class="num">Pasos/día</th><th class="num">Min int/sem</th></tr>
+            </thead>
+            <tbody id="tablaCuerpoBody"></tbody>
+          </table>
+        </div>
+        <p class="note">Flechas ▲▼ frente al mes anterior con dirección de juicio por métrica: en RHR, bajar es ▲ mejora</p>
+      </article>
+    </section>
+
+    <!-- ============ PESTAÑA ARCHIVO — memoria y laboratorio ============ -->
+    <section id="panel-archivo" class="panel" role="tabpanel" aria-labelledby="tab-archivo" tabindex="-1" hidden>
+      <h2 class="sr-only">Archivo</h2>
       <p id="insightArchivo" class="insight"></p>
 
-      <!-- 6.1 Calendario de actividad: heatmap SVG propio (heatmap.js) -->
+      <!-- 2.24 Calendario de actividad [existente] (heatmap.js) -->
       <article id="cardHeatmap" class="card">
         <h3>Calendario de actividad <span class="badge-historico">⟳ histórico completo</span></h3>
         <div id="heatmapPager" class="pager" role="group" aria-label="Paginación por año"></div>
@@ -245,7 +441,7 @@
         <p class="note">Rombo violeta: otra actividad (fuerza o caminata) · click o Enter en una carrera abre su detalle</p>
       </article>
 
-      <!-- 6.2a Correlaciones destacadas (scatter.js:renderCorrelaciones) -->
+      <!-- 2.25a Correlaciones destacadas [existente, ampliada con ejes de salud] -->
       <article id="cardCorrelaciones" class="card">
         <h3>Correlaciones destacadas <span class="badge-historico">⟳ histórico completo</span></h3>
         <div id="corrTiles" class="tiles-grid"></div>
@@ -253,7 +449,7 @@
         <p class="note"><span id="corrN">Muestra pequeña</span>: correlaciones orientativas · click en una tarjeta configura el explorador</p>
       </article>
 
-      <!-- 6.2b Explorador de correlaciones (scatter.js:initExplorador) -->
+      <!-- 2.25b Explorador de correlaciones [existente, ampliado] -->
       <article id="cardExplorador" class="card">
         <h3>Explorador de correlaciones <span class="badge-historico">⟳ histórico completo</span></h3>
         <div class="explorer-controls">
@@ -269,10 +465,10 @@
           <canvas id="chartScatter" role="img" aria-label="Diagrama de dispersión configurable entre dos métricas de las carreras"></canvas>
         </div>
         <p id="scatterInfo" class="kpi-line"></p>
-        <p class="note">R² con etiqueta cualitativa: débil &lt;0,3 · moderada · fuerte &gt;0,7 · con n&lt;20 la lectura es solo orientativa</p>
+        <p class="note">R² con etiqueta cualitativa: débil &lt;0,3 · moderada · fuerte &gt;0,7 · con n&lt;20 la lectura es solo orientativa · pares métrica↔insumo de su propio algoritmo: «relación por construcción»</p>
       </article>
 
-      <!-- 6.3 Historial + modal (modal.js:renderHistorial) -->
+      <!-- 2.26 Historial + modal [existente] (modal.js) -->
       <article id="cardHistorial" class="card">
         <h3>Historial de carreras <span class="badge-historico">⟳ histórico completo</span></h3>
         <div class="table-wrap">

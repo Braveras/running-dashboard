@@ -1,11 +1,20 @@
 /* ==========================================================================
-   scatter.js — Correlaciones destacadas + explorador de correlaciones (§5-6.2).
+   scatter.js — Correlaciones destacadas + explorador de correlaciones
+   (§5-6.2 spec base · §2.25 spec salud).
 
    - renderCorrelaciones(ctx): 3 tiles precalculados (top |r| con n≥15 +
      la anti-intuición del sueño); click → configura el explorador y scrollea.
    - initExplorador(ctx): selects X/Y sincronizados, preset bedtime→EF,
      scatter Chart.js con línea de tendencia, R² con etiqueta cualitativa,
      aviso de muestra pequeña (n<20) y estados vacíos explicativos.
+
+   Salud (§2.25): 4 ejes X nuevos que el pipeline añade a runs.json (§3.5) —
+   `rhr_dia`, `stress_prev`, `readiness_dia`, `spo2_prev`. Hasta que el
+   pipeline corra pueden NO existir en las filas: el select omite la opción
+   si NINGUNA carrera trae el campo. Regla anti-tautología (§1.3): los pares
+   métrica↔insumo de su propio algoritmo Garmin quedan fuera del precálculo
+   de destacadas y, configurados a mano, se etiquetan «relación por
+   construcción» en #scatterInfo.
 
    Reglas: colores SOLO de helpers.js · pace_s SIEMPRE con paceFmt (ejes,
    tooltips) y eje invertido · sin min/max fijos · grid solo horizontal.
@@ -60,11 +69,48 @@ const METRICAS = {
   pace_s:           { label: 'ritmo (min/km)',             frase: 'ritmo',                 fmt: paceFmt, tick: paceFmt, pace: true },
   hr:               { label: 'FC media (ppm)',             frase: 'la FC media',           fmt: entero },
   cadence:          { label: 'cadencia (spm)',             frase: 'la cadencia',           fmt: entero },
+
+  // Ejes nuevos (§2.25) — los añade el pipeline a runs.json (§3.5). `opcional`:
+  // hasta que el pipeline corra pueden no existir → el select omite la opción
+  // si ninguna carrera trae el campo (degradación, no error).
+  rhr_dia:          { label: 'FC reposo del día',           frase: 'tu FC en reposo del día',  fmt: (v) => (Number.isFinite(v) ? `${Math.round(v)} lpm` : '–'), opcional: true },
+  stress_prev:      { label: 'estrés medio del día previo', frase: 'el estrés del día previo', fmt: entero, opcional: true },
+  readiness_dia:    { label: 'readiness matinal',           frase: 'tu readiness matinal',     fmt: entero, opcional: true },
+  spo2_prev:        { label: 'SpO2 del sueño previo',       frase: 'la SpO2 del sueño previo', fmt: (v) => (Number.isFinite(v) ? `${v.toFixed(0)} %` : '–'), opcional: true },
 };
 
 /** Ejes X candidatos (condiciones previas / contexto) y Y (resultado de la carrera). */
-const CAMPOS_X = ['hrv_morning', 'sleep_score_prev', 'sleep_hours_prev', 'rem_pct_prev', 'bedtime_prev', 'temp_c', 'start_hour', 'km'];
+const CAMPOS_X = [
+  'hrv_morning', 'sleep_score_prev', 'sleep_hours_prev', 'rem_pct_prev',
+  'bedtime_prev', 'temp_c', 'start_hour', 'km',
+  'rhr_dia', 'stress_prev', 'readiness_dia', 'spo2_prev', // §2.25
+];
 const CAMPOS_Y = ['ef', 'pace_s', 'hr', 'cadence'];
+
+/**
+ * Pares métrica↔insumo de su propio algoritmo Garmin (§1.3/§2.25): el
+ * readiness se CALCULA con el sueño, el HRV y el estrés — correlacionarlos
+ * es una tautología del modelo, no un hallazgo. Se comparan sin orden.
+ */
+const PARES_TAUTOLOGICOS = [
+  ['readiness_dia', 'sleep_score_prev'],
+  ['readiness_dia', 'sleep_hours_prev'],
+  ['readiness_dia', 'hrv_morning'],
+  ['readiness_dia', 'stress_prev'],
+];
+
+/** ¿Es (a,b) un par «relación por construcción»? (sin orden). */
+function esTautologico(a, b) {
+  return PARES_TAUTOLOGICOS.some(([p, q]) => (p === a && q === b) || (p === b && q === a));
+}
+
+/**
+ * Ejes X realmente ofertables: los históricos siempre; los `opcional` (§2.25)
+ * solo si al menos una carrera trae el campo con valor finito.
+ */
+function camposXDisponibles(runs) {
+  return CAMPOS_X.filter((c) => !METRICAS[c].opcional || runs.some((r) => Number.isFinite(r[c])));
+}
 
 /** Mínimo de pares para publicar una correlación en los tiles (§6.2). */
 const N_MIN_CORR = 15;
@@ -234,12 +280,16 @@ function renderScatter() {
   registerChart('chartScatter', chart);
 
   // R² con etiqueta cualitativa + aviso de muestra pequeña (§6.2).
+  // Par tautológico configurado a mano → etiqueta exacta del spec (§2.25).
   if (info) {
+    const tauto = esTautologico(cx, cy)
+      ? ' · relación por construcción: Garmin calcula una con la otra'
+      : '';
     if (lr) {
       const aviso = lr.n < N_AVISO ? ' · muestra pequeña, orientativo' : '';
-      info.innerHTML = `<strong>r² = ${lr.r2.toFixed(2)}</strong> · ${etiquetaR(Math.abs(lr.r))} · n=${lr.n}${aviso}`;
+      info.innerHTML = `<strong>r² = ${lr.r2.toFixed(2)}</strong> · ${etiquetaR(Math.abs(lr.r))} · n=${lr.n}${aviso}${tauto}`;
     } else {
-      info.textContent = 'Sin ajuste posible con estos datos.';
+      info.textContent = `Sin ajuste posible con estos datos.${tauto}`;
     }
   }
 }
@@ -271,7 +321,11 @@ export function initExplorador(ctx) {
   runsRef = runs;
   clearEmptyState(card);
 
-  // Selects: reconstruir opciones (idempotente en re-init).
+  // Selects: reconstruir opciones (idempotente en re-init). Los ejes X nuevos
+  // (§2.25) solo se ofertan si alguna carrera trae el campo; si el estado
+  // apuntaba a un eje que ya no está (reintento con otros datos), se resetea.
+  const camposX = camposXDisponibles(runs);
+  if (!camposX.includes(estado.x)) estado.x = camposX[0] || 'hrv_morning';
   const selX = $('scatterX');
   const selY = $('scatterY');
   const poblar = (sel, campos) => {
@@ -283,7 +337,7 @@ export function initExplorador(ctx) {
       sel.appendChild(opt);
     }
   };
-  poblar(selX, CAMPOS_X);
+  poblar(selX, camposX);
   poblar(selY, CAMPOS_Y);
 
   // Listeners por propiedad: no se duplican si init se ejecuta dos veces.
@@ -332,10 +386,13 @@ export function renderCorrelaciones(ctx) {
   }
   if (!runsRef) runsRef = runs; // por si un click llega antes de initExplorador
 
-  // Todas las combinaciones X×Y con n≥15 (guarda de muestra mínima).
+  // Todas las combinaciones X×Y con n≥15 (guarda de muestra mínima),
+  // incluidos los ejes nuevos (§2.25) y EXCLUIDOS los pares tautológicos
+  // (§1.3: una métrica contra sus propios insumos jamás es «destacada»).
   const candidatos = [];
   for (const cx of CAMPOS_X) {
     for (const cy of CAMPOS_Y) {
+      if (esTautologico(cx, cy)) continue;
       const puntos = construirPares(runs, cx, cy);
       const lr = linreg(puntos.map((p) => p.x), puntos.map((p) => p.y));
       if (lr && lr.n >= N_MIN_CORR) candidatos.push({ cx, cy, r: lr.r, n: lr.n });

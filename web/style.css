@@ -150,25 +150,12 @@ main { padding-bottom: 96px; }
 }
 .insight-dia:empty { display: none; }
 
-/* Actos: 64px de aire entre ellos (§4) */
-.acto { margin-top: 64px; scroll-margin-top: 76px; }
+/* Paneles de pestaña (§4 spec salud): uno visible, el resto [hidden].
+   Los charts de un panel oculto conservan su instancia (render bajo demanda). */
+.panel { margin-top: 28px; }
+.panel[hidden] { display: none; }
 
-.acto h2 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.acto-num {
-  display: block;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* Insight de acto: 19px/500 en --txt (§3) */
+/* Insight de pestaña: 19px/500 en --txt (§3) */
 .insight {
   margin: 10px 0 0;
   font-size: 19px;
@@ -254,35 +241,42 @@ main { padding-bottom: 96px; }
   padding-block: 4px;
 }
 
-.acts-nav {
+/* Tab bar accesible (§4 spec salud): chips scrollables en móvil, target ≥44px.
+   Dual theme gratis: todo en tokens. El estado seleccionado añade un subrayado
+   S1 además del fondo (no solo color). */
+.tab-bar {
   display: flex;
   gap: 4px;
   margin: 0;
   padding: 0;
-  list-style: none;
   overflow-x: auto;               /* chips scrollables en móvil */
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   flex: 1 1 auto;
   min-width: 0;
 }
-.acts-nav::-webkit-scrollbar { display: none; }
+.tab-bar::-webkit-scrollbar { display: none; }
 
-.nav-link {
+.tab-btn {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;               /* target táctil */
-  padding: 0 12px;
+  min-height: 44px;               /* target táctil (§4) */
+  padding: 0 14px;
+  border: 0;
   border-radius: 8px;
-  font-size: 13px;
+  background: transparent;
   color: var(--muted);
-  text-decoration: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
   white-space: nowrap;
 }
-.nav-link:hover { color: var(--txt); }
-.nav-link[aria-current="true"] {
+.tab-btn:hover { color: var(--txt); }
+.tab-btn[aria-selected="true"] {
   color: var(--txt);
   background: var(--card2);
+  box-shadow: inset 0 -2px 0 var(--s1);
 }
 
 .range-selector {
@@ -429,6 +423,101 @@ main { padding-bottom: 96px; }
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
+
+/* «Garmin opina: …» bajo el mensaje del semáforo (§2.1): segunda opinión
+   ETIQUETADA, tipografía secundaria — nunca compite con el veredicto propio. */
+.garmin-opina {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.garmin-opina:empty { display: none; }
+.garmin-opina strong { color: var(--txt); font-weight: 600; }
+
+/* KPI discreto «semáforo y Garmin coinciden N de M días» (§2.1, guarda n≥20):
+   propia fila del grid del hero. */
+.kpi-acuerdo {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.kpi-acuerdo:empty { display: none; }
+.kpi-acuerdo strong {
+  color: var(--txt);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 6b. Componentes de Salud integral ---------- */
+
+/* Nota fija de no-diagnóstico de Cuerpo (§2): no se oculta jamás. */
+.nota-medica {
+  margin: 16px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  border-left: 3px solid var(--border);
+  padding: 6px 0 6px 12px;
+  max-width: 46em;
+}
+.nota-medica strong { color: var(--txt); font-weight: 600; }
+
+/* Rejilla de KPIs monospace (umbral §2.9, predicciones §2.8) */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.kpi-grid .kpi-item {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+.kpi-grid strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--txt);              /* KPI SIEMPRE en tinta, nunca color de serie */
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.kpi-grid small { font-size: 11px; color: var(--muted); }
+
+/* Edad fitness (§2.20): tres cifras grandes + bullet bars por componente */
+.ef-cifras {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.ef-cifras .cifra {
+  font-size: 12px;
+  color: var(--muted);
+}
+.ef-cifras .cifra strong {
+  display: block;
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--txt);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.ef-bullets {
+  max-width: 520px;
+  margin-bottom: 12px;
+}
+
+/* Selector de distancia de predicciones (§2.8): reusa .explorer-controls;
+   .pred-controls solo lo añade al selector de emptyState (se oculta en vacío). */
+.pred-controls { margin-top: 4px; }
 
 /* ---------- 7. Stat-tiles ---------- */
 .tiles-grid {
@@ -602,8 +691,14 @@ tbody tr[tabindex]:hover { background: var(--card2); }
 .pr-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
-  padding: 7px 0;
+  /* Target táctil ≥44 px (§6.5): las filas son controles (click/Enter abren
+     el modal); 12px + ~20px de texto + 12px ≈ 44. Alcanza también a la lista
+     legada en transición, que comparte clase. */
+  padding: 12px 0;
+  min-height: 44px;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
 }
