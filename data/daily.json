@@ -3293,10 +3293,10 @@
   "sleep_stress": 20.0
  },
  {
-  "bb_charged": 57,
-  "bb_drained": 0,
+  "bb_charged": 59,
+  "bb_drained": 31,
   "bb_high": 62,
-  "bb_last": 62,
+  "bb_last": 33,
   "bb_low": 5,
   "bedtime": 2.13,
   "date": "2026-09-22",

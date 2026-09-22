@@ -163,9 +163,14 @@ export function renderPRsOficiales(ctx) {
     return ta - tb;
   });
 
+  // Sin etiqueta conocida no sabemos ni la UNIDAD del value (los typeId 12-16
+  // del sondeo son récords de pasos/rachas: formatearlos como tiempos mentiría).
+  // Se agrupan en una línea muted con su cuenta — visibles, jamás inventados.
+  const sinMapear = ordenados.filter((pr) => pr && !PR_TIPOS[pr.type_id]);
+
   for (const pr of ordenados) {
-    if (!pr) continue;
-    const etiqueta = PR_TIPOS[pr.type_id] || `Récord tipo ${pr.type_id}`;
+    if (!pr || !PR_TIPOS[pr.type_id]) continue;
+    const etiqueta = PR_TIPOS[pr.type_id];
     const fecha = typeof pr.date === 'string' ? fmtDateEs(pr.date, true) : '–';
     const nombre = typeof pr.activity_name === 'string' && pr.activity_name ? pr.activity_name : '';
 
@@ -192,6 +197,14 @@ export function renderPRsOficiales(ctx) {
       });
     }
     lista.appendChild(fila);
+  }
+
+  if (sinMapear.length) {
+    const nota = document.createElement('p');
+    nota.className = 'note';
+    const ids = sinMapear.map((pr) => pr.type_id).join(', ');
+    nota.textContent = `+ ${sinMapear.length} récords de otros tipos (ids ${ids}: pasos/rachas, unidad sin documentar) — no se muestran valores sin conocer su unidad`;
+    lista.appendChild(nota);
   }
 }
 

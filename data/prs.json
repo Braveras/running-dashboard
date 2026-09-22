@@ -1,0 +1,65 @@
+[
+ {
+  "activity_id": 24128138980,
+  "activity_name": "Madrid - Base",
+  "date": "2026-08-26",
+  "type_id": 1,
+  "value": 367.0870056152344
+ },
+ {
+  "activity_id": 22800714803,
+  "activity_name": "Madrid - Base",
+  "date": "2026-05-07",
+  "type_id": 2,
+  "value": 692.3359985351562
+ },
+ {
+  "activity_id": 22939546617,
+  "activity_name": "Madrid Carrera",
+  "date": "2026-05-19",
+  "type_id": 3,
+  "value": 2668.201904296875
+ },
+ {
+  "activity_id": 22939546617,
+  "activity_name": "Madrid Carrera",
+  "date": "2026-05-19",
+  "type_id": 7,
+  "value": 6055.669921875
+ },
+ {
+  "activity_id": 0,
+  "activity_name": null,
+  "date": null,
+  "type_id": 12,
+  "value": 22461.0
+ },
+ {
+  "activity_id": 0,
+  "activity_name": null,
+  "date": null,
+  "type_id": 13,
+  "value": 65289.0
+ },
+ {
+  "activity_id": 0,
+  "activity_name": null,
+  "date": null,
+  "type_id": 14,
+  "value": 198814.0
+ },
+ {
+  "activity_id": 0,
+  "activity_name": null,
+  "date": null,
+  "type_id": 15,
+  "value": 4.0
+ },
+ {
+  "activity_id": 0,
+  "activity_name": null,
+  "date": null,
+  "type_id": 16,
+  "value": 1.0
+ }
+]
