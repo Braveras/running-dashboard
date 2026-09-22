@@ -3293,11 +3293,20 @@
   "sleep_stress": 20.0
  },
  {
-  "bb_charged": 0,
+  "bb_charged": 57,
   "bb_drained": 0,
-  "bb_high": 5,
-  "bb_last": 5,
+  "bb_high": 62,
+  "bb_last": 62,
   "bb_low": 5,
-  "date": "2026-09-22"
+  "bedtime": 2.13,
+  "date": "2026-09-22",
+  "deep_pct": 22.9,
+  "hrv": 62,
+  "hrv_status": "BALANCED",
+  "party": false,
+  "rem_pct": 13.4,
+  "sleep_hours": 6.34,
+  "sleep_score": 75,
+  "sleep_stress": 16.0
  }
 ]
