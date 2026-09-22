@@ -27,15 +27,32 @@ jobs:
         run: |
           gh api "repos/$GITHUB_REPOSITORY/actions/secrets/public-key" --silent || {
             echo "::error::ACTIONS_PAT inválido: abortando sin consumir token Garmin."; exit 1; }
-      - name: Probe salud
+      - name: Fetch completo (prueba pipeline salud, sin commit ni deploy)
         env:
           GARMIN_TOKENS_B64: ${{ secrets.GARMIN_TOKENS_B64 }}
           GARMIN_DISPLAY_NAME: ${{ secrets.GARMIN_DISPLAY_NAME }}
           TOKEN_OUT: .garmin_tokens_new
         run: |
           echo "$GARMIN_TOKENS_B64" | base64 -d > .garmin_tokens
-          python scripts/probe_health.py
+          python scripts/fetch_data.py
           rm .garmin_tokens
+      - name: Resumen ficheros nuevos
+        run: |
+          python - <<'EOF'
+          import json
+          h = json.load(open('data/health.json'))
+          con = [d for d in h if d.get('rhr') is not None]
+          print(f"health.json: {len(h)} días, {len(con)} con rhr · último: { {k: h[-1].get(k) for k in ('date','rhr','readiness_score','stress_avg','spo2_sleep','steps')} }")
+          t = json.load(open('data/trends.json'))
+          print(f"trends.json: {len(t)} filas · {t[-1] if t else None}")
+          p = json.load(open('data/prs.json'))
+          print(f"prs.json: {len(p)} PRs")
+          sh = json.load(open('data/status_history.json'))
+          nulls = [x for x in sh if x.get('acute_load') is None and x.get('chronic_load') is None and x.get('vo2max') is None]
+          print(f"status_history: {len(sh)} filas, {len(nulls)} todo-null")
+          d = json.load(open('data/daily.json'))
+          print(f"daily.json: {len(d)} días · claves última fila: {sorted(d[-1].keys())}")
+          EOF
       - name: Rotate token secret
         if: always()
         env:
@@ -51,6 +68,6 @@ jobs:
           echo "::error::Rotación fallida tras 3 intentos."; exit 1
       - uses: actions/upload-artifact@v4
         with:
-          name: probe-salud
-          path: probe_result.json
+          name: data-salud
+          path: data/
           retention-days: 3
