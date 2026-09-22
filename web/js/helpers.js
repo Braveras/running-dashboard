@@ -25,6 +25,9 @@ const PALETAS = {
     rampaZonas: ['#b7d3f6', '#86b6ef', '#5598e7', '#2f7bd9', '#1e60b0'],
     rampaHeatmap: ['#1e60b0', '#2f7bd9', '#5598e7', '#9ec4f2'],
     rampaSueno: ['#b9b0f4', '#9085e9', '#6b5fd0'],
+    // Reparto de estrés (§6 spec salud): validada 2026-09-22
+    // (--mode dark --surface #161b24 --ordinal → ALL CHECKS PASS).
+    rampaEstres: ['#b5e6d4', '#7cccae', '#3aa981', '#147a57'],
   },
   light: {
     tokens: {
@@ -42,6 +45,9 @@ const PALETAS = {
     // En claro «mucho km» = oscuro (misma semántica de índices: [0]=poco → [3]=mucho).
     rampaHeatmap: ['#8fb8ee', '#6194dd', '#3a70bd', '#1f4e8f'],
     rampaSueno: ['#a99df0', '#7d6cd8', '#5443a8'],
+    // Pasos PROPIOS diseñados para claro (no inversión): validada 2026-09-22
+    // (--mode light --surface #ffffff y #f6f8fb --ordinal → ALL CHECKS PASS).
+    rampaEstres: ['#56b38e', '#2f9268', '#14724c', '#085234'],
   },
 };
 
@@ -68,6 +74,15 @@ export const RAMPA_HEATMAP = [...PALETAS.dark.rampaHeatmap];
 export const RAMPA_SUENO = [...PALETAS.dark.rampaSueno];
 
 /**
+ * Rampa reparto de estrés (§6 spec salud), 4 pasos ordinales de la familia S2:
+ * [0]=reposo (claro) → [3]=alto (oscuro). SOLO para la card «Reparto semanal
+ * del estrés». Contrato §2.4 del spec base: si se toca un hex, re-ejecutar
+ * validate_palette.js (fallback documentado en §6 del spec salud: barra única
+ * «% tiempo en estrés alto» en S1 si la rampa dejara de validar).
+ */
+export const RAMPA_ESTRES = [...PALETAS.dark.rampaEstres];
+
+/**
  * Activa la paleta del tema en TODAS las constantes exportadas (mutación en
  * sitio: mismas referencias). Tras llamarla hay que re-aplicar los defaults
  * de Chart.js y re-renderizar — lo orquesta app.js en el evento 'themechange'.
@@ -81,7 +96,38 @@ export function setPaletteTheme(theme) {
   RAMPA_ZONAS.splice(0, RAMPA_ZONAS.length, ...p.rampaZonas);
   RAMPA_HEATMAP.splice(0, RAMPA_HEATMAP.length, ...p.rampaHeatmap);
   RAMPA_SUENO.splice(0, RAMPA_SUENO.length, ...p.rampaSueno);
+  RAMPA_ESTRES.splice(0, RAMPA_ESTRES.length, ...p.rampaEstres);
 }
+
+/* ---------- Diccionarios Garmin → español (compartidos entre módulos) ----------
+   Regla transversal del spec salud (§2.1): jamás pintar la constante cruda.
+   Código no mapeado → el fallback que indique cada card en INTERFACES.md. */
+
+/** Niveles de Training Readiness (level). */
+export const NIVEL_READINESS = {
+  LOW: 'bajo', MODERATE: 'moderado', HIGH: 'alto', PRIME: 'óptimo',
+};
+
+/** stressQualifier de get_stats. Valores no listados → 'sin calificar'. */
+export const QUALIFIER_ESTRES = {
+  CALM: 'tranquilo', BALANCED: 'equilibrado', STRESSFUL: 'estresante',
+  VERY_STRESSFUL: 'muy estresante', CALM_AWAKE: 'tranquilo despierto',
+  BALANCED_AWAKE: 'equilibrado despierto', STRESSFUL_AWAKE: 'estresante despierto',
+  VERY_STRESSFUL_AWAKE: 'muy estresante despierto',
+};
+
+/** *FactorFeedback de get_training_readiness (por factor). */
+export const FEEDBACK_FACTOR = {
+  VERY_GOOD: 'muy bueno', GOOD: 'bueno', MODERATE: 'moderado',
+  POOR: 'flojo', VERY_POOR: 'muy flojo', NONE: '—',
+};
+
+/** feedbackShort de readiness — diccionario PARCIAL a propósito (§2.1 spec
+ *  salud): código no mapeado → texto genérico «recuperación correcta»,
+ *  jamás la constante cruda. Ampliable según aparezcan códigos reales. */
+export const FEEDBACK_READINESS = {
+  GOOD_RECOVERY: 'buena recuperación', // verificado en el sondeo 2026-09-22
+};
 
 /** Meses abreviados en español, índice 0 = enero. */
 export const MONTH_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -228,6 +274,32 @@ export function linreg(xs, ys) {
   return { slope, intercept, r, r2: r * r, n };
 }
 
+/**
+ * Percentil personal (§5 spec salud, injerto Atlas corregido): sitúa `valor`
+ * contra la serie que le pases — el LLAMANTE recorta la ventana móvil (p.ej.
+ * los últimos 90 días con dato) ANTES de llamar; aquí no se filtra por fecha.
+ * Guardas internas: no-finitos de la serie se descartan; serie inválida/vacía
+ * o `valor` no finito → null. La guarda de n MÍNIMO es del llamante (n≥60
+ * métricas diarias, n≥20 métricas de carrera: sin n suficiente NO se pinta
+ * badge). Presentación: siempre en tinta (▲▼ + texto), jamás color de estado.
+ * @param {Array<number|null>} serie ventana ya recortada (90d con dato)
+ * @param {number} valor
+ * @returns {{pct:number, n:number}|null} pct 0–100 (rango medio en empates),
+ *          n = valores finitos usados — para aplicar la guarda de n mínimo.
+ */
+export function percentileRank(serie, valor) {
+  if (!Array.isArray(serie) || !Number.isFinite(valor)) return null;
+  const v = serie.filter(Number.isFinite);
+  const n = v.length;
+  if (n === 0) return null;
+  let menores = 0, iguales = 0;
+  for (const x of v) {
+    if (x < valor) menores++;
+    else if (x === valor) iguales++;
+  }
+  return { pct: ((menores + iguales / 2) / n) * 100, n };
+}
+
 /* ---------- Plugin Chart.js: banda/línea horizontal ---------- */
 
 let bandCounter = 0;
@@ -267,29 +339,41 @@ export function makeBandPlugin({
       const sc = scales[scaleID];
       if (!sc || !chartArea) return;
       ctx.save();
+      // Recorte al chartArea: getPixelForValue EXTRAPOLA fuera del área (una
+      // banda 60–100 sobre un eje ceñido a 50–66, o las bandas OMS de peso,
+      // pintarían sobre leyenda/ticks). Se clampan los píxeles y se omite lo
+      // que quede fuera; la etiqueta solo acompaña a lo realmente dibujado.
+      const clampY = (v) => Math.max(chartArea.top, Math.min(chartArea.bottom, sc.getPixelForValue(v)));
+      let yLabel = null;
       if (from !== null && to !== null) {
-        const y1 = sc.getPixelForValue(from);
-        const y2 = sc.getPixelForValue(to);
-        ctx.fillStyle = color;
-        ctx.fillRect(chartArea.left, Math.min(y1, y2), chartArea.right - chartArea.left, Math.abs(y2 - y1));
+        const y1 = clampY(from);
+        const y2 = clampY(to);
+        if (Math.abs(y2 - y1) >= 1) { // intervalo clampado no vacío
+          ctx.fillStyle = color;
+          ctx.fillRect(chartArea.left, Math.min(y1, y2), chartArea.right - chartArea.left, Math.abs(y2 - y1));
+          yLabel = y2;
+        }
       }
       if (y !== null) {
         const yy = sc.getPixelForValue(y);
-        ctx.strokeStyle = lineColor;
-        ctx.setLineDash(dash);
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(chartArea.left, yy);
-        ctx.lineTo(chartArea.right, yy);
-        ctx.stroke();
+        if (yy >= chartArea.top && yy <= chartArea.bottom) { // fuera del área: no se dibuja
+          ctx.strokeStyle = lineColor;
+          ctx.setLineDash(dash);
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(chartArea.left, yy);
+          ctx.lineTo(chartArea.right, yy);
+          ctx.stroke();
+          yLabel = yy;
+        }
       }
-      if (label) {
-        const yRef = y !== null ? sc.getPixelForValue(y) : sc.getPixelForValue(to ?? from);
+      if (label && yLabel !== null) {
         ctx.fillStyle = labelColor;
         ctx.font = `11px ${FONT_MONO}`;
         ctx.textAlign = 'right';
         ctx.textBaseline = 'bottom';
-        ctx.fillText(label, chartArea.right - 4, yRef - 3);
+        // El texto (baseline bottom, −3) también se mantiene dentro del área.
+        ctx.fillText(label, chartArea.right - 4, Math.max(chartArea.top + 14, yLabel) - 3);
       }
       ctx.restore();
     },
@@ -302,7 +386,7 @@ export function makeBandPlugin({
  *  OJO: .explorer-controls queda FUERA a propósito — si el scatter cae en
  *  vacío («prueba otra combinación de ejes»), los selects X/Y deben seguir
  *  visibles para poder salir de ahí. */
-const EMPTY_HIDE_SELECTOR = '.chart-wrap, .table-wrap, .tiles-grid, .heatmap-container, .pr-list, .predicciones, .pager, .zonas-layout';
+const EMPTY_HIDE_SELECTOR = '.chart-wrap, .table-wrap, .tiles-grid, .heatmap-container, .pr-list, .predicciones, .pager, .zonas-layout, .kpi-grid, .ef-cifras, .ef-bullets, .pred-controls';
 
 /**
  * Muestra un estado vacío en una card: oculta su contenido de datos

@@ -12,7 +12,9 @@
    - Sin DOM, sin Chart: solo importa funciones/constantes puras de helpers.js.
    ========================================================================== */
 
-import { paceFmt, MONTH_ES, isoWeekKey, isoAddDays, isoToday } from './helpers.js';
+import {
+  paceFmt, fmtDur, MONTH_ES, isoWeekKey, isoAddDays, isoToday, percentileRank,
+} from './helpers.js';
 
 /* ---------- Constantes del dominio ---------- */
 
@@ -76,6 +78,24 @@ function dias(data) {
   if (!esArray(data?.daily)) return [];
   return data.daily
     .filter((d) => d && typeof d.date === 'string' && d.date.length >= 10)
+    .slice()
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+/** Días de health.json válidos ordenados asc por fecha (fichero OPCIONAL §3.9). */
+function saludDias(data) {
+  if (!esArray(data?.health)) return [];
+  return data.health
+    .filter((d) => d && typeof d.date === 'string' && d.date.length >= 10)
+    .slice()
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+/** Snapshots de trends.json válidos ordenados asc por fecha (fichero OPCIONAL). */
+function tendencias(data) {
+  if (!esArray(data?.trends)) return [];
+  return data.trends
+    .filter((t) => t && typeof t.date === 'string' && t.date.length >= 10)
     .slice()
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 }
@@ -531,6 +551,252 @@ function tplRecupBb80(data) {
   return `Solo ${noches80} de tus últimas 14 noches han recargado la Body Battery a 80 — prioriza dormir antes que sumar kilómetros.`;
 }
 
+/* ==========================================================================
+   PLANTILLAS DE SALUD (§5 spec salud 2026-09-22) — todas sobre health.json /
+   trends.json, ficheros OPCIONALES: sin ellos, cada plantilla devuelve null
+   sin lanzar y el insight cae al siguiente eslabón o al fallback neutro.
+
+   REGLA ANTI-TAUTOLOGÍA (§1.3/§5): PROHIBIDO presentar como hallazgo la
+   correlación entre una métrica y sus propios insumos algorítmicos
+   (sueño→readiness, estrés→readiness, temperatura→sweatLoss). Ninguna
+   plantilla de este bloque cruza esas parejas: cada una habla de UNA métrica
+   contra sí misma en el tiempo, contra el propio historial (percentil) o
+   contra una referencia externa fija (150 min OMS, edad real).
+   ========================================================================== */
+
+/* ---------- HOY (amplían insightHoy) ---------- */
+
+/**
+ * «Llevas N días con readiness ≥70.»
+ * Guardas (§5): racha ≥3 días CONSECUTIVOS con dato y score ≥70; frescura <2d
+ * (el último dato es de hoy o de ayer: «llevas» habla en presente).
+ */
+function tplHoyRachaReadiness(data) {
+  const h = saludDias(data).filter((x) => fin(x.readiness_score));
+  if (!h.length) return null;
+  const ult = h[h.length - 1];
+  if (diffDias(ult.date, isoToday()) >= 2) return null; // frescura <2d
+  if (ult.readiness_score < 70) return null;
+  let racha = 1;
+  for (let i = h.length - 2; i >= 0; i--) {
+    // Días naturales consecutivos CON dato; un hueco corta la racha.
+    if (h[i].date !== isoAddDays(h[i + 1].date, -1)) break;
+    if (h[i].readiness_score < 70) break;
+    racha++;
+  }
+  if (racha < 3) return null;
+  return `Llevas ${racha} días con readiness ≥70 — racha de buena recuperación según Garmin.`;
+}
+
+/**
+ * «Tu FC en reposo de hoy está en tu p10 de 90 días.»
+ * Percentil PERSONAL vía percentileRank (§5, injerto Atlas corregido): ventana
+ * móvil de los últimos 90 días naturales CON dato, no el histórico completo.
+ * Guardas (§5): n≥60 en la ventana; dato de hoy o ayer; percentil ≤15 o ≥85.
+ * Presentación en tinta (texto): el color de estado no existe en este módulo.
+ */
+function tplHoyRhrPercentil(data) {
+  const h = saludDias(data).filter((x) => fin(x.rhr));
+  if (!h.length) return null;
+  const ult = h[h.length - 1];
+  const atraso = diffDias(ult.date, isoToday());
+  if (atraso > 1) return null;                   // dato de hoy o ayer
+  const desde = isoAddDays(ult.date, -89);       // ventana: 90 días naturales
+  const ventana = h.filter((x) => x.date >= desde).map((x) => x.rhr);
+  const res = percentileRank(ventana, ult.rhr);
+  if (!res || res.n < 60) return null;           // guarda n≥60 (métrica diaria)
+  if (res.pct > 15 && res.pct < 85) return null; // solo extremos afirmables
+  const p = Math.round(res.pct);
+  const cuando = atraso === 0 ? 'de hoy' : 'de ayer';
+  const rumbo = res.pct <= 15 ? 'más baja de lo habitual en ti' : 'más alta de lo habitual en ti';
+  return `Tu FC en reposo ${cuando} (${Math.round(ult.rhr)} lpm) está en tu p${p} de 90 días — ${rumbo}.`;
+}
+
+/* ---------- ENTRENAR ---------- */
+
+/**
+ * «Garmin estima tu 5K en 31:03, X min menos que hace un mes.»
+ * Guardas (§5): snapshots de trends.json cubriendo ≥28 días y Δ≥60 s frente
+ * al snapshot más reciente con ≥28 días de antigüedad. Si el tiempo EMPEORA
+ * también se dice (honestidad), con la misma magnitud mínima.
+ */
+function tplEntrenarPred5k(data) {
+  const t = tendencias(data).filter((x) => fin(x.pred_5k_s) && x.pred_5k_s > 0);
+  if (t.length < 2) return null;
+  const ult = t[t.length - 1];
+  if (diffDias(t[0].date, ult.date) < 28) return null; // serie aún en construcción
+  const limite = isoAddDays(ult.date, -28);
+  let base = null;
+  for (let i = t.length - 2; i >= 0; i--) {
+    if (t[i].date <= limite) { base = t[i]; break; } // el más reciente ≥28d atrás
+  }
+  if (!base) return null;
+  const delta = base.pred_5k_s - ult.pred_5k_s;      // >0 = mejora
+  if (Math.abs(delta) < 60) return null;             // magnitud mínima: 60 s
+  const min = num(Math.abs(delta) / 60, 1);
+  const rumbo = delta > 0 ? 'menos' : 'más';
+  return `Garmin estima tu 5K en ${fmtDur(ult.pred_5k_s)}, ${min} min ${rumbo} que hace un mes.`;
+}
+
+/* ---------- RECUPERAR ---------- */
+
+/**
+ * «Tu estrés medio de [mes] (X) supera al de [mes-1] (Y).»
+ * Guardas (§5): ≥21 días con dato en CADA mes y Δ≥5 puntos; solo meses
+ * naturales consecutivos. Nombra los meses explícitamente → la frase sigue
+ * siendo cierta aunque los datos envejezcan (sin guarda de frescura, como
+ * tplZ2Meses). Si el estrés BAJA también se cuenta (misma magnitud).
+ */
+function tplRecupEstresMeses(data) {
+  const h = saludDias(data).filter((x) => fin(x.stress_avg));
+  if (h.length < 42) return null;                // n mínimo global (21 + 21)
+  const porM = new Map();
+  for (const x of h) {
+    const k = x.date.slice(0, 7);
+    if (!porM.has(k)) porM.set(k, []);
+    porM.get(k).push(x.stress_avg);
+  }
+  const meses = [...porM.entries()].filter(([, v]) => v.length >= 21);
+  if (meses.length < 2) return null;
+  const [k0, v0] = meses[meses.length - 2];
+  const [k1, v1] = meses[meses.length - 1];
+  const sep = (+k1.slice(0, 4) - +k0.slice(0, 4)) * 12 + (+k1.slice(5, 7) - +k0.slice(5, 7));
+  if (sep !== 1) return null;                    // solo meses consecutivos
+  const m0 = media(v0);
+  const m1 = media(v1);
+  if (!fin(m0) || !fin(m1)) return null;
+  if (Math.abs(m1 - m0) < 5) return null;        // magnitud mínima: 5 puntos
+  const n0 = mesLargo(`${k0}-01`);
+  const n1 = mesLargo(`${k1}-01`);
+  if (!n0 || !n1) return null;
+  if (m1 > m0) {
+    return `Tu estrés medio de ${n1} (${Math.round(m1)}) supera al de ${n0} (${Math.round(m0)}) — vigila la recuperación fuera del entrenamiento.`;
+  }
+  return `Tu estrés medio de ${n1} (${Math.round(m1)}) baja frente al de ${n0} (${Math.round(m0)}).`;
+}
+
+/* ---------- CUERPO ---------- */
+
+/**
+ * Aviso de SpO2 sostenida (§5, wording médico prudente §8.1): SOLO con media
+ * de sueño <90 % durante ≥7 días naturales CONSECUTIVOS con dato — nunca por
+ * un mínimo aislado (el 79 del sondeo es casi seguro artefacto de postura).
+ * Frase fija del spec, sin cifras alarmistas y JAMÁS en rojo (aquí solo texto).
+ * Frescura ≤2d: «si se mantiene» habla del presente.
+ */
+function tplCuerpoSpo2Sostenida(data) {
+  const h = saludDias(data).filter((x) => fin(x.spo2_sleep));
+  if (h.length < 7) return null;
+  const ult = h[h.length - 1];
+  if (diffDias(ult.date, isoToday()) > 2) return null;
+  let racha = 0;
+  for (let i = h.length - 1; i >= 0; i--) {
+    if (h[i].spo2_sleep >= 90) break;
+    if (racha > 0 && h[i + 1].date !== isoAddDays(h[i].date, 1)) break; // consecutivos
+    racha++;
+  }
+  if (racha < 7) return null;                    // persistencia mínima: 7 días
+  return 'Media de sueño baja sostenida: el sensor de muñeca puede infravalorar; coméntalo con tu médico si se mantiene.';
+}
+
+/**
+ * «Tu RHR lleva ≥3 días ≥5 lpm sobre tu media de 30 días — posible fatiga o
+ * incubando algo.»
+ * Guardas (§5): Δ≥5 lpm y ≥3 días naturales CONSECUTIVOS, cada uno comparado
+ * contra la media de SUS 30 días previos con dato (≥20 de 30 para que la base
+ * sea juzgable). Frescura ≤1d: «lleva» habla en presente.
+ */
+function tplCuerpoRhrElevada(data) {
+  const h = saludDias(data).filter((x) => fin(x.rhr));
+  if (h.length < 23) return null;                // base 20 + racha 3, mínimo
+  if (diffDias(h[h.length - 1].date, isoToday()) > 1) return null; // frescura
+  let racha = 0;
+  for (let i = h.length - 1; i >= 0; i--) {
+    if (racha > 0 && h[i + 1].date !== isoAddDays(h[i].date, 1)) break; // consecutivos
+    const desde = isoAddDays(h[i].date, -30);
+    const prev = [];
+    for (let j = i - 1; j >= 0 && h[j].date >= desde; j--) prev.push(h[j].rhr);
+    if (prev.length < 20) break;                 // base insuficiente para juzgar
+    const m30 = media(prev);
+    if (!fin(m30) || h[i].rhr - m30 < 5) break;  // magnitud mínima: 5 lpm
+    racha++;
+  }
+  if (racha < 3) return null;
+  return `Tu RHR lleva ${racha} días ≥5 lpm sobre tu media de 30 días — posible fatiga o incubando algo.`;
+}
+
+/**
+ * «Semana pasada: X/150 min de intensidad (recomendación OMS).»
+ * Factual (§5); minutos PONDERADOS como cuentan Garmin y la OMS
+ * (moderados + 2×vigorosos). Guardas: frescura <7d y ≥5 días de la semana
+ * pasada con dato de intensidad (una semana a medio registrar mentiría).
+ */
+function tplCuerpoIntensidadOms(data) {
+  const h = saludDias(data);
+  if (!h.length) return null;
+  if (diffDias(h[h.length - 1].date, isoToday()) >= 7) return null; // frescura <7d
+  const semPasada = isoWeekKey(isoAddDays(isoToday(), -7));
+  const filas = h.filter((x) => isoWeekKey(x.date) === semPasada &&
+    (fin(x.intensity_mod) || fin(x.intensity_vig)));
+  if (filas.length < 5) return null;             // semana suficientemente registrada
+  const total = filas.reduce((a, x) => a +
+    (fin(x.intensity_mod) ? x.intensity_mod : 0) +
+    2 * (fin(x.intensity_vig) ? x.intensity_vig : 0), 0);
+  return `Semana pasada: ${Math.round(total)}/150 min de intensidad (recomendación OMS).`;
+}
+
+/**
+ * «Tu edad fitness (28,1) ya es menor que tu edad real (29).»
+ * Factual (§5): del último snapshot de trends.json, solo si de verdad es
+ * menor y con frescura <7d. Sin dirección inversa: si no es menor, silencio
+ * (no hay frase prudente equivalente que no suene a regañina).
+ */
+function tplCuerpoEdadFitness(data) {
+  const t = tendencias(data).filter((x) => fin(x.fitness_age) && fin(x.chrono_age));
+  if (!t.length) return null;
+  const ult = t[t.length - 1];
+  if (diffDias(ult.date, isoToday()) >= 7) return null; // frescura <7d
+  if (ult.fitness_age >= ult.chrono_age) return null;
+  return `Tu edad fitness (${num(ult.fitness_age)}) ya es menor que tu edad real (${ult.chrono_age}).`;
+}
+
+/* ---------- HOY (KPI): acuerdo semáforo ↔ Garmin ---------- */
+
+/**
+ * Veredicto PROPIO de un día histórico (0=verde, 1=ámbar, 2=rojo), réplica
+ * pura de las reglas (2)(3)(4)(6)(6b) del semáforo de today.js aplicadas a la
+ * fila i de daily. La regla (1) frescura no aplica a días pasados (cada día
+ * fue «fresco» para sí mismo) y la (5) ACWR solo añade motivo, nunca color.
+ * Supuestos documentados: la banda HRV es la ACTUAL de status.json (Garmin no
+ * expone baselines históricas) y un día sin HRV (con lookback de 3 días, como
+ * today.js) NI sueño no es evaluable → null (verde por ignorancia mentiría).
+ */
+function veredictoPropioDia(diasArr, i, bLow) {
+  const fila = diasArr[i];
+  let hrv = null;
+  for (let j = i; j >= 0 && j >= i - 3; j--) {
+    if (fin(diasArr[j].hrv)) { hrv = diasArr[j].hrv; break; }
+  }
+  const tieneSueno = fin(fila.sleep_score) || fin(fila.sleep_hours);
+  if (hrv === null && !tieneSueno) return null;  // día no evaluable
+  let nivel = 0;
+  const hrvBajo = hrv !== null && bLow !== null && hrv < bLow;
+  if (hrvBajo) nivel = 1;                                        // (2)
+  if ((fin(fila.sleep_score) && fila.sleep_score < 60) ||
+      (fin(fila.sleep_hours) && fila.sleep_hours < 5)) {
+    nivel = Math.max(nivel, 1);                                  // (3)
+  }
+  if (fila.party === true) nivel = hrvBajo ? 2 : Math.max(nivel, 1); // (4)
+  const prev = i > 0 && diasArr[i - 1].date === isoAddDays(fila.date, -1)
+    ? diasArr[i - 1] : null;
+  if (prev && fin(prev.bb_charged) && fin(prev.bb_drained) &&
+      prev.bb_charged - prev.bb_drained <= -20) {
+    nivel = Math.max(nivel, 1);                                  // (6)
+  }
+  if (fin(fila.bb_high) && fila.bb_high < 40) nivel = Math.max(nivel, 1); // (6b)
+  return nivel;
+}
+
 /* ---------- Plantilla de ARCHIVO ---------- */
 
 /** Totales del histórico (+ fuerza si la hay). Guardas: ≥5 carreras. */
@@ -585,10 +851,15 @@ export function insightDelDia(data) {
   );
 }
 
-/** Acto 1 · HOY (#insightHoy) — estado del día, sin inventar Body Battery. */
+/** Pestaña HOY (#insightHoy) — estado del día, sin inventar Body Battery.
+ *  AMPLIADA (§5 spec salud): percentil personal de RHR y racha de readiness.
+ *  Prioridad: frescura > avisos (fiesta, HRV, sueño) > RHR fuera de lo
+ *  habitual (p≤15/p≥85: lo específico manda) > racha readiness > verde
+ *  genérico. Fallback neutro INTACTO. */
 export function insightHoy(data) {
   return primera(
-    [tplHoyFrescura, tplHoyFiesta, tplHoyHrvBajo, tplHoySuenoCorto, tplHoyVerde],
+    [tplHoyFrescura, tplHoyFiesta, tplHoyHrvBajo, tplHoySuenoCorto,
+      tplHoyRhrPercentil, tplHoyRachaReadiness, tplHoyVerde],
     data,
     'Día normal: decide por sensaciones y mantén la FC por debajo de 142.',
   );
@@ -650,4 +921,70 @@ export function insightArchivo(data) {
     data,
     'El archivo se irá llenando salida a salida.',
   );
+}
+
+/* ---------- Exports NUEVOS por pestaña (§4.7 INTERFACES, §5 spec salud) ----------
+   app.js pinta con cadena de fallback («primera función existente que
+   devuelva texto»): por eso insightEntrenar/insightRecuperar devuelven ''
+   cuando su plantilla no pasa — así el hueco lo llena el insight rico de
+   siempre (insightSemana / insightRecuperacion) en vez de un neutro pobre.
+   insightCuerpo no tiene sucesor en la cadena («→ (vacío)») → fallback
+   neutro propio. */
+
+/** Pestaña ENTRENAR (#insightEntrenar): predicción 5K vs hace un mes.
+ *  '' mientras trends.json no acumule ≥28 días (cadena → insightSemana). */
+export function insightEntrenar(data) {
+  return primera([tplEntrenarPred5k], data, '');
+}
+
+/** Pestaña RECUPERAR (#insightRecuperar): estrés medio mes vs mes anterior.
+ *  '' sin health.json o sin 2 meses con base (cadena → insightRecuperacion). */
+export function insightRecuperar(data) {
+  return primera([tplRecupEstresMeses], data, '');
+}
+
+/** Pestaña CUERPO (#insightCuerpo). Prioridad: SpO2 sostenida (la señal más
+ *  seria y más rara) > RHR elevada (fatiga) > minutos OMS (factual semanal) >
+ *  edad fitness (factual estable). Sin health/trends → fallback neutro. */
+export function insightCuerpo(data) {
+  return primera(
+    [tplCuerpoSpo2Sostenida, tplCuerpoRhrElevada, tplCuerpoIntensidadOms,
+      tplCuerpoEdadFitness],
+    data,
+    'Constantes sin señales llamativas — el cuaderno sigue observando.',
+  );
+}
+
+/** KPI de HOY «semáforo y Garmin coinciden N de M días» (§5 fila 9, §2.1).
+ *  Cálculo PURO para #kpiAcuerdo: lo pinta today.js (C1, contrato §4.1);
+ *  este export existe para que no haya dos aritméticas del acuerdo.
+ *  Mapa (§2.1): verde↔HIGH/PRIME · ámbar↔MODERATE · rojo↔LOW. M = días con
+ *  AMBOS veredictos (nivel Garmin mapeado + día propio evaluable).
+ *  Guarda n≥20 o '' (la card no pinta nada). JAMÁS lanza. */
+export function kpiAcuerdo(data) {
+  try {
+    const d = dias(data);
+    const h = saludDias(data).filter((x) => typeof x.readiness_level === 'string');
+    if (!d.length || !h.length) return '';
+    const b = data?.status?.hrv_baseline;
+    const bLow = fin(b?.balancedLow) ? b.balancedLow : null;
+    const idxPorFecha = new Map(d.map((x, i) => [x.date, i]));
+    const MAPA = { HIGH: 0, PRIME: 0, MODERATE: 1, LOW: 2 };
+    let m = 0;
+    let coinciden = 0;
+    for (const x of h) {
+      const garmin = MAPA[x.readiness_level];
+      if (garmin === undefined) continue;        // nivel no mapeado: fuera
+      const i = idxPorFecha.get(x.date);
+      if (i === undefined) continue;
+      const propio = veredictoPropioDia(d, i, bLow);
+      if (propio === null) continue;             // día propio no evaluable
+      m++;
+      if (propio === garmin) coinciden++;
+    }
+    if (m < 20) return '';                       // guarda n≥20 (§5)
+    return `Semáforo y Garmin coinciden ${coinciden} de ${m} días.`;
+  } catch {
+    return '';
+  }
 }

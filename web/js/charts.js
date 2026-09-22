@@ -849,6 +849,7 @@ export function renderMensual(ctx) {
   }
   clearEmptyState(card);
 
+  const detail = ctx.data.runsDetail; // puede ser null → columna % Z2 en '–'
   const porMes = new Map();
   for (const r of runs) {
     const k = r.date.slice(0, 7);
@@ -859,6 +860,8 @@ export function renderMensual(ctx) {
   const meses = [...porMes.keys()].sort().map((k) => {
     const rs = porMes.get(k);
     const val = (campo) => media(rs.map((r) => r[campo]).filter(Number.isFinite));
+    // % Z2 real del mes (§2.6): media de pct_z2 ponderada por duración.
+    const z2 = pctZ2Ponderado(rs, detail);
     return {
       clave: k,
       km: rs.reduce((a, r) => a + (r.km || 0), 0),
@@ -866,6 +869,7 @@ export function renderMensual(ctx) {
       fc: val('hr'),
       ef: val('ef'),
       cad: val('cadence'),
+      z2: z2 ? z2.pct : null,
     };
   });
 
@@ -891,6 +895,7 @@ export function renderMensual(ctx) {
       <td class="num">${Number.isFinite(m.fc) ? m.fc.toFixed(1) : '–'}${flecha(m.fc, prev.fc, false, 0.1)}</td>
       <td class="num">${Number.isFinite(m.ef) ? m.ef.toFixed(3) : '–'}${flecha(m.ef, prev.ef, true, 0.002)}</td>
       <td class="num">${Number.isFinite(m.cad) ? m.cad.toFixed(1) : '–'}${flecha(m.cad, prev.cad, true, 0.1)}</td>
+      <td class="num">${Number.isFinite(m.z2) ? `${m.z2} %` : '–'}</td>
     </tr>`;
   });
   tbody.innerHTML = filas.join('');
@@ -987,20 +992,21 @@ export function renderZonas(ctx) {
   });
   registerChart('chartZonas', chart);
 
-  // KPI lateral: % del tiempo total en Z1-Z2 (zonas Garmin — etiquetado honesto).
-  // Fase 3: si ≥60 % de las carreras del histórico traen pct_z2 numérico
-  // (tiempo REAL con FC ≤ techo, calculado en fetch_data.py), el KPI principal
-  // pasa a ser ese % real (media ponderada por duración) y el dato de zonas
-  // Garmin queda como lectura secundaria. Sin pct_z2 → KPI actual intacto.
+  // KPI lateral (§2.6 spec salud): «% tiempo real ≤142» = media de pct_z2
+  // (tiempo REAL con FC ≤ techo, calculado en fetch_data.py) PONDERADA por
+  // duración sobre el histórico; las carreras sin pct_z2 se excluyen y SE
+  // DICE cuántas. Sin ningún pct_z2 → KPI de zonas Garmin intacto (sin línea nueva).
   const kpi = $id('kpiZonas');
   if (kpi) {
     const total = totales.reduce((a, b) => a + b, 0);
     const z12 = secs.reduce((a, fila) => a + fila[0] + fila[1], 0);
     const pctGarmin = total > 0 ? Math.round((z12 / total) * 100) : null;
-    const pctReal = pctZ2Ponderado(runs, detail);
-    if (pctReal !== null) {
-      kpi.innerHTML = `<strong>% tiempo ≤${TECHO_Z2} real: ${pctReal} %</strong> · referencia 80/20`
-        + (pctGarmin !== null ? `<br>zonas Garmin: ~${pctGarmin} % Z1-Z2` : '');
+    const real = pctZ2Ponderado(runs, detail);
+    if (real !== null) {
+      const plural = real.sinDato === 1 ? 'carrera sin dato excluida' : 'carreras sin dato excluidas';
+      kpi.innerHTML = `<strong>% tiempo real ≤${TECHO_Z2}: ${real.pct} %</strong> · referencia 80/20`
+        + (pctGarmin !== null ? `<br>zonas Garmin: ~${pctGarmin} % Z1-Z2` : '')
+        + (real.sinDato > 0 ? `<br>${real.sinDato} ${plural}` : '');
     } else if (pctGarmin !== null) {
       kpi.innerHTML = `<strong>~${pctGarmin} %</strong> del tiempo en Z1-Z2<br>referencia 80/20 · zonas Garmin`;
     } else {
@@ -1010,29 +1016,30 @@ export function renderZonas(ctx) {
 }
 
 /**
- * % real de tiempo con FC ≤ techo Z2 sobre el histórico (fase 3): media de
- * runs_detail[id].pct_z2 PONDERADA por la duración (dur_s) de cada carrera.
- * Solo se usa si ≥60 % de las carreras traen pct_z2 numérico — clave ausente
- * o null (despliegues viejos / carreras sin serie de FC) no cuenta ni lanza.
- * @returns {number|null} porcentaje redondeado, o null si no hay base fiable.
+ * % real de tiempo con FC ≤ techo Z2 (§2.6 spec salud): media de
+ * runs_detail[id].pct_z2 PONDERADA por la duración (dur_s) de las carreras
+ * del subconjunto dado (histórico para el KPI, un mes para la tabla).
+ * Carreras con pct_z2 null/ausente, o sin duración, se EXCLUYEN del
+ * ponderado y se cuentan en `sinDato` — el llamante lo declara (honestidad).
+ * @returns {{pct:number, sinDato:number}|null} null si ninguna carrera aporta base.
  */
 function pctZ2Ponderado(runs, detail) {
   if (!Array.isArray(runs) || !runs.length || !detail) return null;
-  let conPct = 0;
+  let sinDato = 0;
   let sumaPct = 0;
   let sumaDur = 0;
   for (const r of runs) {
     const d = detail[String(r.id)];
     const pct = d ? d.pct_z2 : null; // clave ausente → undefined → no finito
-    if (!Number.isFinite(pct)) continue;
-    conPct++;
-    if (Number.isFinite(r.dur_s) && r.dur_s > 0) {
-      sumaPct += pct * r.dur_s;
-      sumaDur += r.dur_s;
+    if (!Number.isFinite(pct) || !Number.isFinite(r.dur_s) || !(r.dur_s > 0)) {
+      sinDato++;
+      continue;
     }
+    sumaPct += pct * r.dur_s;
+    sumaDur += r.dur_s;
   }
-  if (conPct / runs.length < 0.6 || !(sumaDur > 0)) return null;
-  return Math.round(sumaPct / sumaDur);
+  if (!(sumaDur > 0)) return null;
+  return { pct: Math.round(sumaPct / sumaDur), sinDato };
 }
 
 /* ==========================================================================

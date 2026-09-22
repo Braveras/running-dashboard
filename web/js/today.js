@@ -1,16 +1,20 @@
 /* ==========================================================================
-   today.js — ACTO 1 «Hoy» (semáforo hero + bullet bars + ACWR)
-              y ACTO 2 «Esta semana» (stat-tiles con sparklines).
+   today.js — pestaña HOY (§2.1 semáforo hero + adición Garmin · §2.2 desglose
+              de readiness · §2.3 constantes de hoy) y los stat-tiles de
+              Entrenar (§2.4, el tile de peso emigró a Cuerpo).
    Contrato: INTERFACES.md §4.1. Colores SOLO de helpers.js.
    ========================================================================== */
 
 import {
-  TOKENS, ESTADO, SERIES,
-  fmtDurLargo, fmtDateEs,
+  TOKENS, ESTADO, SERIES, FONT_MONO,
+  NIVEL_READINESS, QUALIFIER_ESTRES, FEEDBACK_FACTOR, FEEDBACK_READINESS,
+  fmtDurLargo,
   isoAddDays, isoToday, isoWeekKey,
-  expMovingAvg, emptyState, clearEmptyState,
+  expMovingAvg, percentileRank, emptyState, clearEmptyState,
 } from './helpers.js';
 import { sparklineSvg } from './sparkline.js';
+import { registerChart, destroyChart } from './state.js';
+import { kpiAcuerdo } from './insights.js';
 
 /* ---------- Utilidades locales ---------- */
 
@@ -33,12 +37,28 @@ function fmtNum(v, dec = 1) {
   return v.toFixed(dec).replace('.', ',');
 }
 
+/** Entero con separador de miles español. fmtInt(10234) → '10.234'. */
+function fmtInt(v) {
+  if (!Number.isFinite(v)) return '–';
+  return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
 /** Crea un elemento con clase y texto opcionales. */
 function el(tag, cls, text) {
   const n = document.createElement(tag);
   if (cls) n.className = cls;
   if (text !== undefined) n.textContent = text;
   return n;
+}
+
+/** Fila de health.json de una fecha exacta (o null). health viene asc. */
+function filaSalud(health, iso) {
+  if (!Array.isArray(health)) return null;
+  for (let i = health.length - 1; i >= 0; i--) {
+    if (health[i] && health[i].date === iso) return health[i];
+    if (health[i] && health[i].date < iso) break; // orden asc: ya no está
+  }
+  return null;
 }
 
 /**
@@ -404,8 +424,79 @@ export function renderSemaforo(ctx) {
     } else {
       nota.textContent = 'ACWR no computable todavía: hacen falta al menos dos semanas de carreras.';
     }
+    // §2.1: el bullet de ACWR gana la lectura Garmin textual del factor de
+    // carga («Garmin: carga al 100 %», acwr_pct del día de referencia).
+    const filaHoy = filaSalud(ctx.data ? ctx.data.health : null, ref);
+    if (filaHoy && Number.isFinite(filaHoy.acwr_pct)) {
+      nota.textContent += ` · Garmin: carga al ${fmtNum(filaHoy.acwr_pct, 0)} %`;
+    }
     pintaTendenciaRatio(nota, ctx.data ? ctx.data.statusHistory : null);
   }
+
+  // §2.1: segunda opinión Garmin ETIQUETADA (jamás fusionada con el semáforo)
+  // + KPI de acuerdo histórico. La lógica del semáforo de arriba NO se toca.
+  pintaGarminOpina(ctx.data ? ctx.data.health : null, ref);
+  pintaKpiAcuerdo(ctx.data || {});
+}
+
+/* ---------- §2.1 · Adición Garmin al semáforo ---------- */
+
+/**
+ * Línea «Garmin opina: readiness 58 · moderado — buena recuperación» en
+ * #garminOpina, desde la fila de health.json de la fecha de referencia.
+ * - Fila de hoy con `readiness_score` → score + level traducido
+ *   (NIVEL_READINESS; level no mapeado → se omite, jamás la constante cruda)
+ *   + feedbackShort por diccionario PARCIAL (FEEDBACK_READINESS; no mapeado →
+ *   «recuperación correcta»; sin feedback → se omite el tramo).
+ * - health.json existe pero sin score de hoy (sin sync matinal) → texto exacto
+ *   «Garmin aún no ha puntuado hoy» (y no se declara acuerdo ni desacuerdo).
+ * - Sin health.json → #garminOpina queda vacío (la card no degrada por esto).
+ */
+function pintaGarminOpina(health, refIso) {
+  const p = document.getElementById('garminOpina');
+  if (!p) return;
+  p.textContent = '';
+  if (!Array.isArray(health) || !health.length) return;
+  const fila = filaSalud(health, refIso);
+  if (!fila || !Number.isFinite(fila.readiness_score)) {
+    p.appendChild(el('strong', null, 'Garmin aún no ha puntuado hoy'));
+    return;
+  }
+  const nivel = typeof fila.readiness_level === 'string'
+    ? (NIVEL_READINESS[fila.readiness_level] || '') : '';
+  let texto = '';
+  if (nivel) texto += ` · ${nivel}`;
+  if (typeof fila.readiness_feedback === 'string' && fila.readiness_feedback) {
+    texto += ` — ${FEEDBACK_READINESS[fila.readiness_feedback] || 'recuperación correcta'}`;
+  }
+  p.appendChild(el('strong', null, 'Garmin opina:'));
+  p.appendChild(document.createTextNode(' readiness '));
+  // Cifra en <strong class="mono"> — mono tabular (§3); el strong de la
+  // etiqueta «Garmin opina:» es UI y se queda en tipografía de UI.
+  p.appendChild(el('strong', 'mono', fmtNum(fila.readiness_score, 0)));
+  if (texto) p.appendChild(document.createTextNode(texto));
+}
+
+/**
+ * KPI discreto «semáforo y Garmin coinciden N de M días» en #kpiAcuerdo
+ * (§2.1). UNA sola aritmética del acuerdo: Insights.kpiAcuerdo (que replica
+ * el lookback de HRV de 3 días de renderSemaforo vía veredictoPropioDia) —
+ * aquí solo se PINTA su frase, con N y M en <strong> (mono tabular por CSS
+ * .kpi-acuerdo strong). La guarda n≥20 vive en insights.js ('' → vacío).
+ */
+function pintaKpiAcuerdo(data) {
+  const p = document.getElementById('kpiAcuerdo');
+  if (!p) return;
+  p.textContent = '';
+  const frase = kpiAcuerdo(data);
+  const m = typeof frase === 'string'
+    ? frase.match(/^Semáforo y Garmin coinciden (\d+) de (\d+) días\.?$/) : null;
+  if (!m) return; // sin guarda superada (o frase inesperada): elemento vacío
+  p.appendChild(document.createTextNode('Semáforo y Garmin coinciden '));
+  p.appendChild(el('strong', null, m[1]));
+  p.appendChild(document.createTextNode(' de '));
+  p.appendChild(el('strong', null, m[2]));
+  p.appendChild(document.createTextNode(' días'));
 }
 
 /**
@@ -458,9 +549,11 @@ function semanasConsecutivas(runs, refIso) {
   return semanas;
 }
 
-/** Construye un tile estándar. spark: number[]|null · delta: {txt, cls}|null. */
-function tile({ label, valorHtml, delta, spark, placeholder = false }) {
+/** Construye un tile estándar. spark: number[]|null · delta: {txt, cls}|null ·
+ *  tip: tooltip nativo (title) del tile — §2 spec salud: tooltips en todo. */
+function tile({ label, valorHtml, delta, spark, placeholder = false, tip = '' }) {
   const t = el('div', placeholder ? 'tile tile--placeholder' : 'tile');
+  if (tip) t.title = tip;
   const head = el('div', 'tile-head');
   const mark = el('span', 'tile-mark');
   mark.style.background = SERIES.s1; // marca de color de serie (8px)
@@ -494,15 +587,16 @@ function valorConUnidad(cifra, unidad) {
 }
 
 /**
- * 5 stat-tiles (§5-2.1): km semana ISO, racha real, carreras/4 sem,
- * tiempo total del rango (único dependiente del rango) y peso.
+ * 4 stat-tiles (§2.4 spec salud): km semana ISO, racha real, carreras/4 sem
+ * y tiempo total del rango (único dependiente del rango). El tile de peso
+ * MURIÓ aquí: vive como card §2.21 en la pestaña Cuerpo.
  * Re-ejecutable: vacía #statTiles y reconstruye.
  */
 export function renderStatTiles(ctx) {
   const card = document.getElementById('cardTiles');
   const cont = document.getElementById('statTiles');
   if (!card || !cont) return;
-  const { runs, daily } = ctx.data || {};
+  const { runs } = ctx.data || {};
 
   if (!Array.isArray(runs) || !runs.length) {
     emptyState(card, 'Sin carreras registradas todavía · los tiles aparecerán con la primera');
@@ -578,39 +672,334 @@ export function renderStatTiles(ctx) {
     delta: { txt: `${ctx.fRuns.length} ${ctx.fRuns.length === 1 ? 'carrera' : 'carreras'} en el rango`, cls: '' },
     spark: ctx.fRuns.map((r) => (Number.isFinite(r.dur_s) ? r.dur_s / 60 : null)),
   }));
+}
 
-  // --- Tile 5 · Peso: último pesaje + delta vs anterior; placeholder si el
-  // último dato tiene >30 días (NUNCA se oculta el tile — spec §5-2.1). ---
-  const pesajes = Array.isArray(daily)
-    ? daily.filter((d) => Number.isFinite(d.weight_kg)) : [];
-  if (!pesajes.length) {
-    cont.appendChild(tile({
-      label: 'Peso',
-      valorHtml: valorConUnidad('–', ''),
-      delta: { txt: 'sin pesajes registrados', cls: '' },
-      spark: null,
-      placeholder: true,
-    }));
-  } else {
-    const ultimoPeso = pesajes[pesajes.length - 1];
-    const anterior = pesajes.length > 1 ? pesajes[pesajes.length - 2] : null;
-    const reciente = diasEntre(ultimoPeso.date, ref) <= 30;
-    let deltaPeso = { txt: `último: ${fmtDateEs(ultimoPeso.date)}`, cls: '' };
-    if (anterior) {
-      const dif = ultimoPeso.weight_kg - anterior.weight_kg;
-      // Supuesto v1: bajar peso = mejor (tendencia buscada 88 → 83.7 kg).
-      deltaPeso = {
-        txt: `${dif <= 0 ? '▼ −' : '▲ +'}${fmtNum(Math.abs(dif), 1)} kg vs anterior · ${fmtDateEs(ultimoPeso.date)}`,
-        cls: dif <= 0 ? 'delta-mejor' : 'delta-peor',
-      };
+/* ==========================================================================
+   §2.2 DESGLOSE DE READINESS — 6 factores de hoy, barras horizontales 0–100
+   ========================================================================== */
+
+/** Orden FIJO de los factores (§2.2): [etiqueta, clave %, clave feedback]. */
+const FACTORES_READINESS = [
+  ['Sueño de anoche', 'factor_sleep_pct', 'factor_sleep_fb'],
+  ['Historial de sueño', 'factor_sleep_hist_pct', 'factor_sleep_hist_fb'],
+  ['HRV', 'factor_hrv_pct', 'factor_hrv_fb'],
+  ['Tiempo de recuperación', 'factor_recovery_pct', 'factor_recovery_fb'],
+  ['Historial de estrés', 'factor_stress_pct', 'factor_stress_fb'],
+  ['Carga ACWR', 'acwr_pct', 'acwr_fb'],
+];
+
+/**
+ * Card #cardDesgloseReadiness (exenta del rango: usa ctx.data). Los 6 factores
+ * del readiness del día MÁS RECIENTE de health.json con readiness_score no
+ * null, como barras horizontales 0–100 en UNA sola serie S1 (mismo indicador,
+ * no categorías): sin leyenda, % como etiqueta directa al final de cada barra
+ * y feedback Garmin traducido (FEEDBACK_FACTOR) como texto muted junto a la
+ * barra — JAMÁS coloreando la barra. Tooltip con el feedback de cada factor.
+ * Los campos *_fb se leen defensivamente (el pipeline puede no exportarlos
+ * aún): sin feedback se omite el texto, nunca se rompe ni se pinta la
+ * constante cruda. Sin health.json o sin día con readiness → emptyState.
+ */
+export function renderDesgloseReadiness(ctx) {
+  const card = document.getElementById('cardDesgloseReadiness');
+  if (!card) return;
+  const canvas = document.getElementById('chartDesgloseReadiness');
+  const health = ctx.data ? ctx.data.health : null;
+
+  if (!Array.isArray(health) || !health.length) {
+    destroyChart('chartDesgloseReadiness'); // idempotencia también al degradar
+    emptyState(card, 'Sin datos de salud todavía · el desglose aparecerá cuando el pipeline genere health.json');
+    return;
+  }
+  let fila = null;
+  for (let i = health.length - 1; i >= 0; i--) {
+    if (health[i] && Number.isFinite(health[i].readiness_score)) { fila = health[i]; break; }
+  }
+  if (!fila || !canvas) {
+    destroyChart('chartDesgloseReadiness');
+    emptyState(card, 'Garmin aún no ha puntuado ningún día · el desglose aparecerá tras una sincronización matinal');
+    return;
+  }
+  clearEmptyState(card);
+
+  const etiquetas = [];
+  const valores = [];
+  const feedbacks = [];
+  for (const [nombre, kPct, kFb] of FACTORES_READINESS) {
+    etiquetas.push(nombre);
+    valores.push(Number.isFinite(fila[kPct]) ? fila[kPct] : null);
+    const codigo = typeof fila[kFb] === 'string' ? fila[kFb] : null; // defensivo
+    feedbacks.push(codigo && FEEDBACK_FACTOR[codigo] ? FEEDBACK_FACTOR[codigo] : '');
+  }
+
+  // Etiqueta directa al final de cada barra: «47 %» en tinta + feedback muted.
+  const etiquetasPlugin = {
+    id: 'desgloseEtiquetas',
+    afterDatasetsDraw(chart) {
+      const g = chart.ctx;
+      const meta = chart.getDatasetMeta(0);
+      if (!meta || !meta.data) return;
+      g.save();
+      g.font = `11px ${FONT_MONO}`;
+      g.textBaseline = 'middle';
+      g.textAlign = 'left';
+      meta.data.forEach((barra, i) => {
+        if (!Number.isFinite(valores[i]) || !barra) return;
+        let xx = barra.x + 6;
+        const pctTxt = `${fmtNum(valores[i], 0)} %`;
+        g.fillStyle = TOKENS.txt;
+        g.fillText(pctTxt, xx, barra.y);
+        if (feedbacks[i]) {
+          xx += g.measureText(pctTxt).width + 6;
+          g.fillStyle = TOKENS.muted;
+          g.fillText(`· ${feedbacks[i]}`, xx, barra.y);
+        }
+      });
+      g.restore();
+    },
+  };
+
+  // Chart.js exige destruir ANTES de reusar el canvas: registerChart destruye
+  // el chart viejo DESPUÉS de evaluar su argumento, así que sin este destroy
+  // el segundo render (toggle de tema, reintento) lanzaría «Canvas is already
+  // in use» — mismo patrón que el resto de módulos.
+  destroyChart('chartDesgloseReadiness');
+  registerChart('chartDesgloseReadiness', new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: etiquetas,
+      datasets: [{
+        data: valores,
+        backgroundColor: SERIES.s1,
+        borderRadius: 3,
+        barPercentage: 0.65,
+        categoryPercentage: 0.8,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      layout: { padding: { right: 120 } }, // sitio para «100 % · muy bueno»
+      // Tooltips tap-friendly (§6.2 spec base): sin esto, con barras de 12px
+      // habría que acertar la barra, y un factor null no tendría tooltip.
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false }, // una sola serie: sin leyenda (§0 regla 6)
+        tooltip: {
+          callbacks: {
+            label(item) {
+              const fb = feedbacks[item.dataIndex];
+              return `${fmtNum(item.parsed.x, 0)} de 100${fb ? ` · ${fb}` : ''}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { suggestedMin: 0, suggestedMax: 100, grid: { drawTicks: false } },
+        y: { grid: { display: false } },
+      },
+    },
+    plugins: [etiquetasPlugin],
+  }));
+}
+
+/* ==========================================================================
+   §2.3 CONSTANTES DE HOY — 6 stat-tiles con sparklines de 14 días
+   ========================================================================== */
+
+/**
+ * Card #cardConstantes → #constantesTiles (exenta del rango: usa ctx.data).
+ * 6 tiles (reusa .tile + sparklineSvg; sparkline = últimos 14 días naturales
+ * de health.json, huecos = null): ① RHR de hoy + delta vs media 7d + badge de
+ * percentil personal (percentileRank sobre los últimos 90 días con dato,
+ * guarda n≥60, tinta ▲▼ — jamás color de estado); ② SpO2 del sueño;
+ * ③ respiración del sueño; ④ estrés medio de AYER + qualifier traducido;
+ * ⑤ pasos de AYER vs objetivo dinámico; ⑥ minutos de intensidad de la semana
+ * ISO en curso vs 150 OMS (el tooltip añade el ponderado mod + 2×vig).
+ * Día sin dato → tile placeholder «— sin dato», NUNCA se oculta el tile.
+ * Sin health.json → emptyState de la card.
+ */
+export function renderConstantes(ctx) {
+  const card = document.getElementById('cardConstantes');
+  const cont = document.getElementById('constantesTiles');
+  if (!card || !cont) return;
+  const health = ctx.data ? ctx.data.health : null;
+
+  if (!Array.isArray(health) || !health.length) {
+    emptyState(card, 'Sin datos de salud todavía · las constantes aparecerán cuando el pipeline genere health.json');
+    return;
+  }
+  clearEmptyState(card);
+  cont.textContent = '';
+
+  const ref = fechaRef(ctx.data);
+  const ayer = isoAddDays(ref, -1);
+  const porFecha = new Map();
+  for (const h of health) if (h && typeof h.date === 'string') porFecha.set(h.date, h);
+  const hoyFila = porFecha.get(ref) || null;
+  const ayerFila = porFecha.get(ayer) || null;
+
+  /** Serie de los 14 días naturales que acaban en ref (huecos → null). */
+  const spark14 = (campo) => {
+    const out = [];
+    for (let i = 13; i >= 0; i--) {
+      const f = porFecha.get(isoAddDays(ref, -i));
+      out.push(f && Number.isFinite(f[campo]) ? f[campo] : null);
     }
-    if (!reciente) deltaPeso.txt += ' · sin pesajes recientes';
-    cont.appendChild(tile({
-      label: 'Peso',
-      valorHtml: valorConUnidad(fmtNum(ultimoPeso.weight_kg, 1), 'kg'),
-      delta: deltaPeso,
-      spark: pesajes.length >= 2 ? pesajes.map((p) => p.weight_kg) : null,
-      placeholder: !reciente,
-    }));
+    return out;
+  };
+
+  /** Tile placeholder homogéneo: valor «—», delta literal «— sin dato». */
+  const tileSinDato = (label, campo, tip) => tile({
+    label,
+    valorHtml: valorConUnidad('—', ''),
+    delta: { txt: '— sin dato', cls: '' },
+    spark: campo ? spark14(campo) : null,
+    placeholder: true,
+    tip,
+  });
+
+  // --- ① FC reposo hoy + delta vs media 7d + percentil personal (§5) ---
+  {
+    const tip = 'FC en reposo de hoy, frente a tu media de 7 días y a tus últimos 90 días';
+    if (hoyFila && Number.isFinite(hoyFila.rhr)) {
+      let delta = null;
+      if (Number.isFinite(hoyFila.rhr_7d)) {
+        const dif = hoyFila.rhr - hoyFila.rhr_7d;
+        // Dirección de juicio: en RHR, bajar es mejora (§2.16/§2.23).
+        delta = dif === 0
+          ? { txt: '= igual que tu media 7d', cls: '' }
+          : {
+              txt: `${dif < 0 ? '▼ −' : '▲ +'}${fmtNum(Math.abs(dif), 0)} lpm vs media 7d`,
+              cls: dif < 0 ? 'delta-mejor' : 'delta-peor',
+            };
+      }
+      const t = tile({
+        label: 'FC reposo · hoy',
+        valorHtml: valorConUnidad(fmtNum(hoyFila.rhr, 0), 'lpm'),
+        delta,
+        spark: spark14('rhr'),
+        tip,
+      });
+      // Badge de percentil personal: ventana móvil de 90 días CON dato,
+      // guarda n≥60 (métrica diaria) o no se pinta. Tinta, sin color de estado.
+      const corte90 = isoAddDays(ref, -89);
+      const ventana = health
+        .filter((h) => h && h.date >= corte90 && h.date <= ref)
+        .map((h) => h.rhr);
+      const pr = percentileRank(ventana, hoyFila.rhr);
+      if (pr && pr.n >= 60) {
+        const flecha = pr.pct >= 50 ? '▲' : '▼';
+        t.insertBefore(
+          el('div', 'tile-delta', `${flecha} p${Math.round(pr.pct)} de tus últimos 90 días`),
+          t.querySelector('.tile-spark'), // null → append al final
+        );
+      }
+      cont.appendChild(t);
+    } else {
+      cont.appendChild(tileSinDato('FC reposo · hoy', 'rhr', tip));
+    }
+  }
+
+  // --- ② SpO2 media del sueño ---
+  {
+    const tip = 'SpO2 media del sueño de anoche · pulsioximetría de muñeca, orientativa';
+    if (hoyFila && Number.isFinite(hoyFila.spo2_sleep)) {
+      cont.appendChild(tile({
+        label: 'SpO2 del sueño',
+        valorHtml: valorConUnidad(fmtNum(hoyFila.spo2_sleep, 0), '%'),
+        delta: { txt: 'media del sueño de anoche', cls: '' },
+        spark: spark14('spo2_sleep'),
+        tip,
+      }));
+    } else {
+      cont.appendChild(tileSinDato('SpO2 del sueño', 'spo2_sleep', tip));
+    }
+  }
+
+  // --- ③ Respiración del sueño ---
+  {
+    const tip = 'Respiraciones por minuto durante el sueño de anoche';
+    if (hoyFila && Number.isFinite(hoyFila.resp_sleep)) {
+      cont.appendChild(tile({
+        label: 'Respiración del sueño',
+        valorHtml: valorConUnidad(fmtNum(hoyFila.resp_sleep, 1), 'rpm'),
+        delta: { txt: 'media del sueño de anoche', cls: '' },
+        spark: spark14('resp_sleep'),
+        tip,
+      }));
+    } else {
+      cont.appendChild(tileSinDato('Respiración del sueño', 'resp_sleep', tip));
+    }
+  }
+
+  // --- ④ Estrés medio de ayer + qualifier traducido ---
+  {
+    const tip = 'Estrés medio de ayer · escala Garmin 0–100, estimación propietaria';
+    if (ayerFila && Number.isFinite(ayerFila.stress_avg)) {
+      const q = typeof ayerFila.stress_qualifier === 'string' && ayerFila.stress_qualifier
+        ? (QUALIFIER_ESTRES[ayerFila.stress_qualifier] || 'sin calificar')
+        : null; // sin qualifier: se omite, jamás la constante cruda
+      cont.appendChild(tile({
+        label: 'Estrés medio · ayer',
+        valorHtml: valorConUnidad(fmtNum(ayerFila.stress_avg, 0), ''),
+        delta: { txt: q ? `${q} · ayer` : 'ayer', cls: '' },
+        spark: spark14('stress_avg'),
+        tip,
+      }));
+    } else {
+      cont.appendChild(tileSinDato('Estrés medio · ayer', 'stress_avg', tip));
+    }
+  }
+
+  // --- ⑤ Pasos de ayer vs objetivo dinámico ---
+  {
+    const tip = 'Pasos de ayer frente al objetivo dinámico de Garmin (cambia a diario)';
+    if (ayerFila && Number.isFinite(ayerFila.steps)) {
+      const objetivo = Number.isFinite(ayerFila.step_goal) ? ayerFila.step_goal : null;
+      cont.appendChild(tile({
+        label: 'Pasos · ayer',
+        valorHtml: valorConUnidad(fmtInt(ayerFila.steps), ''),
+        delta: {
+          txt: objetivo !== null ? `objetivo (dinámico): ${fmtInt(objetivo)}` : 'sin objetivo registrado',
+          cls: '',
+        },
+        spark: spark14('steps'),
+        tip,
+      }));
+    } else {
+      cont.appendChild(tileSinDato('Pasos · ayer', 'steps', tip));
+    }
+  }
+
+  // --- ⑥ Minutos de intensidad de la semana ISO en curso vs 150 OMS ---
+  {
+    const semana = isoWeekKey(ref);
+    let mod = 0, vig = 0, hayDato = false;
+    for (const h of health) {
+      if (!h || typeof h.date !== 'string' || h.date > ref) continue;
+      if (isoWeekKey(h.date) !== semana) continue;
+      if (Number.isFinite(h.intensity_mod)) { mod += h.intensity_mod; hayDato = true; }
+      if (Number.isFinite(h.intensity_vig)) { vig += h.intensity_vig; hayDato = true; }
+    }
+    const ponderado = mod + 2 * vig; // así cuentan Garmin y la OMS
+    const tip = `Minutos de intensidad de la semana en curso · ponderado OMS (moderados + 2×vigorosos): ${fmtNum(ponderado, 0)} de 150`;
+    const sparkInt = [];
+    for (let i = 13; i >= 0; i--) {
+      const f = porFecha.get(isoAddDays(ref, -i));
+      sparkInt.push(f && (Number.isFinite(f.intensity_mod) || Number.isFinite(f.intensity_vig))
+        ? (Number.isFinite(f.intensity_mod) ? f.intensity_mod : 0) +
+          (Number.isFinite(f.intensity_vig) ? f.intensity_vig : 0)
+        : null);
+    }
+    if (hayDato) {
+      cont.appendChild(tile({
+        label: 'Min intensidad · semana',
+        valorHtml: valorConUnidad(fmtNum(mod + vig, 0), 'min'),
+        delta: { txt: 'de 150 min/sem · recomendación OMS', cls: '' },
+        spark: sparkInt,
+        tip,
+      }));
+    } else {
+      cont.appendChild(tileSinDato('Min intensidad · semana', 'intensity_mod', tip));
+    }
   }
 }

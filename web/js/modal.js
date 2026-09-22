@@ -1,11 +1,16 @@
 /* ==========================================================================
    modal.js — detalle de carrera en <dialog> accesible + tabla de historial.
-   Contrato: INTERFACES.md §4.5 · Spec §5-6.3 y §6.
+   Contrato: INTERFACES.md §4.5 · Spec base §5-6.3 y §6 · Spec salud §2.26.
    Exporta: initModal(ctx), openRunModal(runId), renderHistorial(ctx).
+
+   Salud (§2.26): los badges 🏆 del historial se alimentan de data/prs.json
+   (PRs oficiales Garmin, match activity_id↔run.id) con fallback de paridad
+   a la lógica computada si prs.json falta; el modal gana las filas
+   «readiness esa mañana» y «sudor estimado» (omitidas en silencio si faltan).
    ========================================================================== */
 
 import {
-  RAMPA_ZONAS,
+  RAMPA_ZONAS, NIVEL_READINESS,
   paceFmt, fmtDur, fmtDateEs,
   emptyState, clearEmptyState,
 } from './helpers.js';
@@ -98,7 +103,47 @@ function mitadesDeRun(runId) {
   return res;
 }
 
-/* ---------- PRs a nivel de fila (para los badges 🏆 del historial) ---------- */
+/* ---------- Salud del día (health.json, §2.26) ---------- */
+
+/** Entrada de health.json de una fecha exacta 'YYYY-MM-DD' (o null). */
+function healthDeFecha(date) {
+  const health = _data && Array.isArray(_data.health) ? _data.health : null;
+  if (!health || !date) return null;
+  return health.find((d) => d && d.date === date) || null;
+}
+
+/* ---------- PRs oficiales Garmin (data/prs.json, §2.26) ---------- */
+
+/** Mapping candidato de type_id (§0.4 INTERFACES; no mapeado → «Récord tipo N»). */
+const PR_TYPE_ES = {
+  1: '1 km', 2: '1 milla', 3: '5 km', 4: '10 km',
+  7: 'carrera más larga', 8: 'media maratón', 9: 'maratón',
+};
+
+/** Etiqueta humana del tipo de récord oficial (jamás ocultar el no mapeado). */
+function etiquetaPr(typeId) {
+  return PR_TYPE_ES[typeId] || `Récord tipo ${typeId}`;
+}
+
+/**
+ * Mapa id de carrera (string) → etiquetas de récord oficial, desde data.prs
+ * (match por activity_id ↔ run.id). Devuelve null si prs.json no está
+ * cargado → el llamante usa el fallback computado (paridad, §4.5).
+ */
+function prsOficialesPorId(prs) {
+  if (!Array.isArray(prs) || !prs.length) return null;
+  const mapa = new Map();
+  for (const pr of prs) {
+    if (!pr || pr.activity_id == null) continue;
+    const key = String(pr.activity_id);
+    const tipos = mapa.get(key) || [];
+    tipos.push(etiquetaPr(pr.type_id));
+    mapa.set(key, tipos);
+  }
+  return mapa;
+}
+
+/* ---------- PRs a nivel de fila (fallback computado de los badges 🏆) ---------- */
 
 /**
  * Ids de carreras que ostentan un PR de fila: mejor ritmo, más larga,
@@ -334,12 +379,30 @@ export function openRunModal(runId) {
     ? `<p class="kpi-line">Noche previa: ${noche.join(' · ')}</p>`
     : '<p class="note">Sin datos de la noche previa.</p>';
 
+  /* --- Salud del día (§2.26): readiness matinal + sudor estimado ---
+     Fuente: run.readiness_dia (§3.5) con lookup de respaldo en health.json
+     por fecha; nivel traducido por diccionario (no mapeado → sin nivel,
+     jamás la constante cruda). Ambas filas se omiten en silencio si faltan. */
+  const hDia = healthDeFecha(run.date);
+  const salud = [];
+  const readiness = Number.isFinite(run.readiness_dia)
+    ? run.readiness_dia
+    : (hDia && Number.isFinite(hDia.readiness_score) ? hDia.readiness_score : null);
+  if (readiness !== null) {
+    const nivel = hDia ? NIVEL_READINESS[hDia.readiness_level] : undefined;
+    salud.push(`readiness esa mañana: <strong>${fnum(readiness, 0)}</strong>${nivel ? ` (${nivel})` : ''}`);
+  }
+  if (hDia && Number.isFinite(hDia.sweat_ml)) {
+    salud.push(`sudor estimado: <strong>${fnum(hDia.sweat_ml, 0)}</strong> ml`);
+  }
+  const saludHtml = salud.length ? `<p class="kpi-line">${salud.join(' · ')}</p>` : '';
+
   /* --- Detalle: zonas + splits + desacople (o nota si no hay detalle) --- */
   const detalleHtml = detail
     ? htmlZonas(detail.zones) + htmlSplits(detail.splits) + htmlDesacople(run, mitades, detail.pct_z2)
     : '<p class="note">Sin detalle disponible para esta carrera (splits y zonas no exportados).</p>';
 
-  body.innerHTML = metricas + clima + nocheHtml + detalleHtml;
+  body.innerHTML = metricas + clima + nocheHtml + saludHtml + detalleHtml;
 
   /* --- Apertura accesible: foco al cierre, retorno al cerrar ---
      Guard de soporte: en webviews sin HTMLDialogElement, showModal no existe
@@ -383,15 +446,24 @@ export function renderHistorial(ctx) {
   clearEmptyState(card);
 
   const desc = runs.slice().reverse(); // loadData ordena asc; mostramos DESC
-  const prIds = idsConPr(runs);
+
+  // Badges 🏆 (§2.26): oficiales de prs.json si está cargado; si falta,
+  // fallback de PARIDAD con la lógica computada de siempre (§4.5).
+  const prOficiales = prsOficialesPorId(_data ? _data.prs : null);
+  const prIds = prOficiales ? null : idsConPr(runs);
   const visibles = _showAll ? desc : desc.slice(0, 10);
 
   tbody.innerHTML = visibles.map((r) => {
     const mit = mitadesDeRun(r.id);
     const esSplitNeg = !!(mit && mit.pace2 < mit.pace1);
+    const tiposPr = prOficiales ? prOficiales.get(String(r.id)) : null;
+    const esPr = prOficiales ? !!tiposPr : prIds.has(String(r.id));
+    const prTitulo = tiposPr
+      ? `Récord oficial Garmin: ${tiposPr.join(' · ')}`
+      : 'Récord personal';
     const badges = [
-      prIds.has(String(r.id))
-        ? '<span class="badge-pr" title="Récord personal">🏆<span class="sr-only"> récord personal</span></span>'
+      esPr
+        ? `<span class="badge-pr" title="${prTitulo}">🏆<span class="sr-only"> ${prTitulo}</span></span>`
         : '',
       esSplitNeg ? '<span class="badge-split" title="Segunda mitad más rápida">split −</span>' : '',
     ].join(' ');

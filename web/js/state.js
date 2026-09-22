@@ -16,10 +16,17 @@ const FICHEROS = [
   ['meta', 'data/meta.json'],
 ];
 
-/* Opcionales (fase 3): su ausencia NO cuenta como error ni sale en el banner
-   — despliegues con datos aún sin regenerar simplemente no los pintan. */
+/* Opcionales: su ausencia NO cuenta como error ni sale en el banner
+   — despliegues con datos aún sin regenerar simplemente no los pintan.
+   §3.9 spec salud: si falta health.json, Cuerpo/Recuperar degradan con
+   emptyState y el resto vive; si falta trends.json, degradan predicciones,
+   fitness age y umbral; si falta prs.json, degradan los récords oficiales.
+   El hero de Hoy funciona entero sin ninguno de los tres. */
 const FICHEROS_OPCIONALES = [
   ['statusHistory', 'data/status_history.json'],
+  ['health', 'data/health.json'],   // lista diaria (patrón daily.json)
+  ['trends', 'data/trends.json'],   // snapshots {date,...} — nace 2026-09, sin backfill
+  ['prs', 'data/prs.json'],         // 9 PRs oficiales (sobrescritura completa)
 ];
 
 /**
@@ -52,7 +59,7 @@ export async function loadData() {
       data[clave] = null;
     }
   }));
-  for (const clave of ['runs', 'daily', 'allActivities']) {
+  for (const clave of ['runs', 'daily', 'allActivities', 'health', 'trends']) {
     if (Array.isArray(data[clave])) {
       data[clave].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     }
@@ -101,16 +108,55 @@ export function filterByRange(rows, range) {
 
 /**
  * Contexto de render que reciben TODOS los constructores de módulos.
- * fRuns/fDaily se filtran y quedan ordenados UNA sola vez por render.
- * @returns {{data:object, fRuns:Array, fDaily:Array, range:(7|30|90|'all')}}
+ * fRuns/fDaily/fHealth se filtran y quedan ordenados UNA sola vez por render.
+ * @returns {{data:object, fRuns:Array, fDaily:Array, fHealth:Array, range:(7|30|90|'all')}}
  */
 export function buildCtx() {
   return {
     data: _data,
     fRuns: filterByRange(_data ? _data.runs : null, _range),
     fDaily: filterByRange(_data ? _data.daily : null, _range),
+    fHealth: filterByRange(_data ? _data.health : null, _range),
     range: _range,
   };
+}
+
+/* ---------- Registry por pestaña (§4 spec salud) ----------
+   Render bajo demanda: la primera activación de una pestaña ejecuta sus
+   renders; el cambio de rango re-renderiza SOLO los dependientes del rango
+   de la pestaña visible y marca `dirty` las demás, que se ponen al día al
+   activarse. Los charts NO se destruyen al ocultar una pestaña (el canvas
+   oculto conserva la instancia; el registry de destroyChart sigue
+   gobernando los re-render). app.js puebla las listas con setTabRenders. */
+
+/** Ids lógicos de pestaña = hashes de ruta (#hoy es el default). */
+export const TAB_IDS = ['hoy', 'entrenar', 'recuperar', 'cuerpo', 'archivo'];
+
+const _tabs = new Map();
+
+/**
+ * Define (o redefine, en un re-init) los renders de una pestaña.
+ * @param {string} tabId uno de TAB_IDS
+ * @param {{dependientes?: Function[], exentos?: Function[]}} listas
+ *   dependientes: renders que se re-ejecutan al cambiar el rango global;
+ *   exentos: renders que solo corren al activar la pestaña por primera vez
+ *   (o tras invalidateTabs). Todos reciben `ctx`.
+ */
+export function setTabRenders(tabId, { dependientes = [], exentos = [] } = {}) {
+  _tabs.set(tabId, { dependientes, exentos, rendered: false, dirty: false });
+}
+
+/** @returns {{dependientes:Function[], exentos:Function[], rendered:boolean, dirty:boolean}|undefined} */
+export function getTab(tabId) { return _tabs.get(tabId); }
+
+/** Cambio de rango: marca dirty todas las pestañas MENOS la visible. */
+export function markDirtyExcept(tabId) {
+  for (const [id, e] of _tabs) if (id !== tabId) e.dirty = true;
+}
+
+/** Cambio de tema: invalida todas (rendered=false → re-render completo al activarse). */
+export function invalidateTabs() {
+  for (const e of _tabs.values()) { e.rendered = false; e.dirty = false; }
 }
 
 /* ---------- Registry de charts (destroy correcto en re-renders) ---------- */
@@ -134,6 +180,20 @@ export function destroyChart(id) {
 
 /** @returns {object|undefined} instancia Chart registrada bajo `id`. */
 export function getChart(id) { return _charts.get(id); }
+
+/**
+ * Fuerza el resize de los charts cuyo canvas está VISIBLE (offsetParent no
+ * nulo). app.js la llama al mostrar una pestaña: un canvas que estuvo oculto
+ * (panel [hidden]) puede haber colapsado a 0×0 y Chart.js no siempre se
+ * recupera solo al reaparecer. Los charts de pestañas ocultas no se tocan.
+ */
+export function resizeVisibleCharts() {
+  for (const chart of _charts.values()) {
+    try {
+      if (chart.canvas && chart.canvas.offsetParent !== null) chart.resize();
+    } catch (_e) { /* un chart roto no tumba el resto */ }
+  }
+}
 
 /* ---------- Breakpoint móvil unificado (§4: matchMedia a 600px) ---------- */
 
