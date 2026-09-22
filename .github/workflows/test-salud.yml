@@ -1,0 +1,56 @@
+name: Sonda salud (probe)
+# Temporal (rama sonda-salud): inventaria endpoints de salud de Garmin.
+# Sin commit ni deploy. SIEMPRE con validación de PAT antes y rotación después.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [sonda-salud]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Madrid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "garminconnect==0.3.5" tzdata
+      - name: Check ACTIONS_PAT can write secrets
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PAT }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/secrets/public-key" --silent || {
+            echo "::error::ACTIONS_PAT inválido: abortando sin consumir token Garmin."; exit 1; }
+      - name: Probe salud
+        env:
+          GARMIN_TOKENS_B64: ${{ secrets.GARMIN_TOKENS_B64 }}
+          GARMIN_DISPLAY_NAME: ${{ secrets.GARMIN_DISPLAY_NAME }}
+          TOKEN_OUT: .garmin_tokens_new
+        run: |
+          echo "$GARMIN_TOKENS_B64" | base64 -d > .garmin_tokens
+          python scripts/probe_health.py
+          rm .garmin_tokens
+      - name: Rotate token secret
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PAT }}
+        run: |
+          if [ ! -f .garmin_tokens_new ]; then echo "Sin token que rotar."; exit 0; fi
+          for i in 1 2 3; do
+            if base64 -w0 .garmin_tokens_new | gh secret set GARMIN_TOKENS_B64 --repo "$GITHUB_REPOSITORY"; then
+              echo "Rotado."; rm .garmin_tokens_new; exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::Rotación fallida tras 3 intentos."; exit 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: probe-salud
+          path: probe_result.json
+          retention-days: 3
