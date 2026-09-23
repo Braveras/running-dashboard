@@ -3311,9 +3311,9 @@
  },
  {
   "bb_charged": 67,
-  "bb_drained": 45,
+  "bb_drained": 67,
   "bb_high": 72,
-  "bb_last": 27,
+  "bb_last": 5,
   "bb_low": 5,
   "bedtime": 1.45,
   "date": "2026-09-23",

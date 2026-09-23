@@ -1,5 +1,5 @@
 {
- "acute_load": 80,
+ "acute_load": 113,
  "chronic_load": 137,
  "date": "2026-09-23",
  "hrv_baseline": {
@@ -10,6 +10,6 @@
  },
  "optimal_max": 205.5,
  "optimal_min": 109.60000000000001,
- "status_feedback": "RECOVERY_1",
+ "status_feedback": "MAINTAINING_1",
  "vo2max": 44.5
 }
