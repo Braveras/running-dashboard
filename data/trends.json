@@ -130,5 +130,49 @@
   "pred_5k_s": 1879,
   "pred_half_s": 9310,
   "pred_marathon_s": 21099
+ },
+ {
+  "chrono_age": 29,
+  "comp_bmi": {
+   "potentialAge": 24.851437211444843,
+   "priority": 1,
+   "stale": false,
+   "targetValue": 20.9,
+   "value": 26.8
+  },
+  "comp_rhr": {
+   "stale": false,
+   "value": 59
+  },
+  "comp_vig_days": {
+   "potentialAge": 26.508849576713562,
+   "priority": 3,
+   "stale": false,
+   "targetValue": 3,
+   "value": 0.5
+  },
+  "comp_vig_min": {
+   "potentialAge": 26.508849576713562,
+   "priority": 2,
+   "stale": false,
+   "targetValue": 75,
+   "value": 15.5
+  },
+  "date": "2026-09-25",
+  "fitness_age": 28.145207202801835,
+  "fitness_age_achievable": 21.05165740474679,
+  "ftp_origin": "weight",
+  "ftp_w": 352,
+  "ftp_wkg": 4.240963855421687,
+  "last_updated": "2026-09-25T00:00:00.0",
+  "lt_date": "2026-08-21",
+  "lt_hr": 177,
+  "lt_speed_factor": null,
+  "lt_speed_raw": 0.29444361999999996,
+  "lt_speed_unit_verified": false,
+  "pred_10k_s": 4052,
+  "pred_5k_s": 1879,
+  "pred_half_s": 9310,
+  "pred_marathon_s": 21100
  }
 ]
