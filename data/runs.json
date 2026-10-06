@@ -1173,5 +1173,30 @@
   "stress_prev": 37,
   "temp_c": 26.1,
   "type": "running"
+ },
+ {
+  "bedtime_prev": null,
+  "cadence": 139,
+  "calories": 219.0,
+  "date": "2026-10-05",
+  "dur_s": 1626,
+  "ef": 0.87,
+  "hr": 128.0,
+  "hr_max": 147.0,
+  "hrv_morning": null,
+  "id": 24618244479,
+  "km": 3.03,
+  "pace_s": 537,
+  "readiness_dia": 81,
+  "rem_pct_prev": null,
+  "rhr_dia": 64,
+  "sleep_hours_prev": null,
+  "sleep_score_prev": null,
+  "spo2_prev": null,
+  "start": "2026-10-05T20:18:06",
+  "start_hour": 20.3,
+  "stress_prev": 34,
+  "temp_c": 23.9,
+  "type": "running"
  }
 ]
