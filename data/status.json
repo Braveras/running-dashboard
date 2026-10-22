@@ -1,15 +1,15 @@
 {
- "acute_load": 10,
+ "acute_load": 7,
  "chronic_load": 137,
- "date": "2026-10-21",
+ "date": "2026-10-22",
  "hrv_baseline": {
   "balancedLow": 49,
-  "balancedUpper": 85,
+  "balancedUpper": 84,
   "lowUpper": 43,
-  "markerValue": 0.430542
+  "markerValue": 0.407135
  },
  "optimal_max": 205.5,
  "optimal_min": 109.60000000000001,
- "status_feedback": "RECOVERY_2",
+ "status_feedback": "DETRAINING",
  "vo2max": 44.8
 }
