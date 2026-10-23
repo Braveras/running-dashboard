@@ -316,5 +316,11 @@
   "chronic_load": 137,
   "date": "2026-10-22",
   "vo2max": 44.8
+ },
+ {
+  "acute_load": 5,
+  "chronic_load": 137,
+  "date": "2026-10-23",
+  "vo2max": 44.8
  }
 ]
