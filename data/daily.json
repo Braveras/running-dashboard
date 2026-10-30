@@ -3895,10 +3895,10 @@
   "sleep_stress": 21.0
  },
  {
-  "bb_charged": 66,
-  "bb_drained": 31,
+  "bb_charged": 74,
+  "bb_drained": 68,
   "bb_high": 71,
-  "bb_last": 40,
+  "bb_last": 11,
   "bb_low": 5,
   "bedtime": 2.52,
   "date": "2026-10-29",
@@ -3910,5 +3910,15 @@
   "sleep_hours": 6.37,
   "sleep_score": 78,
   "sleep_stress": 13.0
+ },
+ {
+  "bb_charged": 32,
+  "bb_drained": 6,
+  "bb_high": 37,
+  "bb_last": 37,
+  "bb_low": 5,
+  "date": "2026-10-30",
+  "hrv": 56,
+  "hrv_status": "BALANCED"
  }
 ]
