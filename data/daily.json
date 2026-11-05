@@ -3998,10 +3998,10 @@
  },
  {
   "bb_charged": 50,
-  "bb_drained": 46,
+  "bb_drained": 61,
   "bb_high": 61,
-  "bb_last": 20,
-  "bb_low": 11,
+  "bb_last": 5,
+  "bb_low": 5,
   "bedtime": 1.05,
   "date": "2026-11-04",
   "deep_pct": 13.3,
@@ -4012,5 +4012,22 @@
   "sleep_hours": 4.75,
   "sleep_score": 38,
   "sleep_stress": 16.0
+ },
+ {
+  "bb_charged": 14,
+  "bb_drained": 1,
+  "bb_high": 19,
+  "bb_last": 18,
+  "bb_low": 5,
+  "bedtime": 4.57,
+  "date": "2026-11-05",
+  "deep_pct": 30.4,
+  "hrv": 45,
+  "hrv_status": "BALANCED",
+  "party": false,
+  "rem_pct": 6.1,
+  "sleep_hours": 3.57,
+  "sleep_score": 36,
+  "sleep_stress": 47.0
  }
 ]
