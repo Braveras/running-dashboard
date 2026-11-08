@@ -4053,6 +4053,23 @@
   "bb_high": 5,
   "bb_last": 5,
   "bb_low": 5,
-  "date": "2026-11-07"
+  "bedtime": 6.33,
+  "date": "2026-11-07",
+  "deep_pct": 18.9,
+  "hrv": 28,
+  "hrv_status": "UNBALANCED",
+  "party": true,
+  "rem_pct": 0.0,
+  "sleep_hours": 1.23,
+  "sleep_score": 16,
+  "sleep_stress": 66.0
+ },
+ {
+  "bb_charged": null,
+  "bb_drained": null,
+  "bb_high": null,
+  "bb_last": null,
+  "bb_low": null,
+  "date": "2026-11-08"
  }
 ]
