@@ -4065,11 +4065,28 @@
   "sleep_stress": 66.0
  },
  {
-  "bb_charged": null,
-  "bb_drained": null,
-  "bb_high": null,
-  "bb_last": null,
-  "bb_low": null,
+  "bb_charged": 0,
+  "bb_drained": 38,
+  "bb_high": 53,
+  "bb_last": 15,
+  "bb_low": 15,
   "date": "2026-11-08"
+ },
+ {
+  "bb_charged": 50,
+  "bb_drained": 51,
+  "bb_high": 54,
+  "bb_last": 14,
+  "bb_low": 5,
+  "bedtime": 4.98,
+  "date": "2026-11-09",
+  "deep_pct": 34.0,
+  "hrv": 54,
+  "hrv_status": "UNBALANCED",
+  "party": false,
+  "rem_pct": 3.1,
+  "sleep_hours": 4.27,
+  "sleep_score": 48,
+  "sleep_stress": 16.0
  }
 ]
