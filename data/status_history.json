@@ -454,5 +454,11 @@
   "chronic_load": 137,
   "date": "2026-11-15",
   "vo2max": null
+ },
+ {
+  "acute_load": 0,
+  "chronic_load": 137,
+  "date": "2026-11-16",
+  "vo2max": null
  }
 ]
