@@ -4328,10 +4328,10 @@
   "sleep_stress": 32.0
  },
  {
-  "bb_charged": 74,
-  "bb_drained": 25,
+  "bb_charged": 81,
+  "bb_drained": 66,
   "bb_high": 79,
-  "bb_last": 54,
+  "bb_last": 20,
   "bb_low": 5,
   "bedtime": 1.35,
   "date": "2026-11-24",
@@ -4343,5 +4343,13 @@
   "sleep_hours": 6.12,
   "sleep_score": 53,
   "sleep_stress": 20.0
+ },
+ {
+  "bb_charged": 2,
+  "bb_drained": 0,
+  "bb_high": 21,
+  "bb_last": 21,
+  "bb_low": 19,
+  "date": "2026-11-25"
  }
 ]
